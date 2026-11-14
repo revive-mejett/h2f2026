@@ -3,6 +3,19 @@ import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js
 import skyUrl from './assets/sky.png'
 import titleUrl from './assets/title.png'
 import ufoUrl from './assets/ufo.png'
+import moneyUrl from './assets/ore_money.png'
+import bronzeUrl from './assets/ore_bronze.png'
+import concordiaiumUrl from './assets/ore_concordiaium.png'
+import copperUrl from './assets/ore_copper.png'
+import diamondUrl from './assets/ore_diamond.png'
+import emeraldUrl from './assets/ore_emerald.png'
+import goldUrl from './assets/ore_gold.png'
+import ironUrl from './assets/ore_iron.png'
+import mythrilUrl from './assets/ore_mythril.png'
+import rubyUrl from './assets/ore_ruby.png'
+import sapphireUrl from './assets/ore_sapphire.png'
+import scsiumUrl from './assets/ore_scsium.png'
+import silverUrl from './assets/ore_silver.png'
 
 function loadTexture(url) {
   return new Promise((resolve, reject) => {
@@ -13,6 +26,21 @@ function loadTexture(url) {
   })
 }
 
+const ORE_DEFS = [
+  { id: 'iron', name: 'Iron', value: 0.15, minDepth: 0, maxDepth: 150, url: ironUrl, color: 0xb8c0c8 },
+  { id: 'copper', name: 'Copper', value: 0.20, minDepth: 0, maxDepth: 3000, url: copperUrl, color: 0xe07a3c },
+  { id: 'bronze', name: 'Bronze', value: 0.25, minDepth: 0, maxDepth: 150, url: bronzeUrl, color: 0xcd7f32 },
+  { id: 'silver', name: 'Silver', value: 0.60, minDepth: 25, maxDepth: 300, url: silverUrl, color: 0xd9e4ec },
+  { id: 'gold', name: 'Gold', value: 1.15, minDepth: 50, maxDepth: 1000, url: goldUrl, color: 0xffd700 },
+  { id: 'mythril', name: 'Mythril', value: 2.30, minDepth: 100, maxDepth: 3000, url: mythrilUrl, color: 0xc084fc },
+  { id: 'ruby', name: 'Ruby', value: 11.50, minDepth: 150, maxDepth: 3000, url: rubyUrl, color: 0xf43f5e },
+  { id: 'sapphire', name: 'Sapphire', value: 27.50, minDepth: 225, maxDepth: 3000, url: sapphireUrl, color: 0x3b82f6 },
+  { id: 'emerald', name: 'Emerald', value: 48.50, minDepth: 280, maxDepth: 3000, url: emeraldUrl, color: 0x10b981 },
+  { id: 'diamond', name: 'Diamond', value: 120.00, minDepth: 300, maxDepth: 3000, url: diamondUrl, color: 0x22d3ee },
+  { id: 'concordiaium', name: 'Concordiaium', value: 350.67, minDepth: 900, maxDepth: 3000, url: concordiaiumUrl, color: 0xf472b6 },
+  { id: 'scsium', name: 'Scsium', value: 1000.67, minDepth: 1000, maxDepth: 3000, url: scsiumUrl, color: 0xfacc15 },
+]
+
 const app = new Application()
 const root = document.querySelector('#app')
 
@@ -20,7 +48,7 @@ const WIDTH = 960
 const HEIGHT = 540
 
 const COLS = 20
-const ROWS = 1000
+const ROWS = 3000
 const TILE_SIZE = 64
 const WORLD_WIDTH = COLS * TILE_SIZE
 const WORLD_HEIGHT = ROWS * TILE_SIZE
@@ -36,11 +64,19 @@ await app.init({
 root.appendChild(app.canvas)
 app.canvas.setAttribute('tabindex', '0')
 
-const [skyTexture, titleTexture, ufoTexture] = await Promise.all([
+const [skyTexture, titleTexture, ufoTexture, moneyTexture, ...oreTextures] = await Promise.all([
   loadTexture(skyUrl),
   loadTexture(titleUrl),
   loadTexture(ufoUrl),
+  loadTexture(moneyUrl),
+  ...ORE_DEFS.map((o) => loadTexture(o.url)),
 ])
+
+const ORES = ORE_DEFS.map((def, i) => ({
+  ...def,
+  texture: oreTextures[i],
+  weight: 1 / Math.pow(def.value, 0.55),
+}))
 
 const keys = new Set()
 const pressedQueue = new Set()
@@ -119,8 +155,14 @@ function createGroundScene() {
   const tilesGfx = new Graphics()
   world.addChild(tilesGfx)
 
+  const oresLayer = new Container()
+  world.addChild(oresLayer)
+
   const particlesGfx = new Graphics()
   world.addChild(particlesGfx)
+
+  const popupsLayer = new Container()
+  world.addChild(popupsLayer)
 
   const player = new Sprite(ufoTexture)
   player.anchor.set(0.5, 1)
@@ -128,8 +170,34 @@ function createGroundScene() {
   player.scale.set(ufoScale)
   world.addChild(player)
 
+  const moneyHud = new Container()
+  moneyHud.position.set(16, 14)
+
+  const moneyIcon = new Sprite(moneyTexture)
+  moneyIcon.anchor.set(0.5)
+  const moneyIconScale = 32 / Math.max(moneyTexture.width, moneyTexture.height)
+  moneyIcon.scale.set(moneyIconScale)
+  moneyIcon.position.set(16, 16)
+  moneyHud.addChild(moneyIcon)
+
+  const moneyText = new Text({
+    text: '$0.00',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 22,
+      fill: '#ffd94a',
+      fontWeight: '800',
+      stroke: { color: '#1a0830', width: 4 },
+    },
+  })
+  moneyText.anchor.set(0, 0.5)
+  moneyText.position.set(40, 16)
+  moneyHud.addChild(moneyText)
+
+  scene.addChild(moneyHud)
+
   const depthText = new Text({
-    text: 'Depth: 0 / 1000',
+    text: `Depth: 0 / ${ROWS}`,
     style: {
       fontFamily: 'Segoe UI, system-ui, sans-serif',
       fontSize: 18,
@@ -138,7 +206,7 @@ function createGroundScene() {
       stroke: { color: '#1a0830', width: 4 },
     },
   })
-  depthText.position.set(16, 14)
+  depthText.position.set(16, 54)
   scene.addChild(depthText)
 
   const hint = new Text({
@@ -156,7 +224,9 @@ function createGroundScene() {
   scene.addChild(hint)
 
   const grid = new Uint8Array(COLS * ROWS)
+  const oreGrid = new Int8Array(COLS * ROWS)
   const brownShades = [0x78492a, 0x6e4225, 0x825130, 0x673e22]
+  const oreSpritePool = []
 
   const PLAYER_W = 42
   const PLAYER_H = 42
@@ -167,7 +237,9 @@ function createGroundScene() {
   const MAX_FALL_SPEED = 650
   const MIN_PY = -HEIGHT * 0.4
   const DIG_COOLDOWN = 0.14
+  const ORE_SPAWN_CHANCE = 0.22
 
+  let money = 0
   let px = WORLD_WIDTH / 2
   let py = 0
   let vx = 0
@@ -181,9 +253,52 @@ function createGroundScene() {
   let lastViewKey = ''
 
   const particles = []
+  const popups = []
+
+  function formatMoney(amount) {
+    return `$${amount.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+  }
+
+  function populateOres() {
+    oreGrid.fill(-1)
+    for (let r = 0; r < ROWS; r++) {
+      const eligible = []
+      let totalWeight = 0
+      for (let i = 0; i < ORES.length; i++) {
+        const ore = ORES[i]
+        if (r >= ore.minDepth && r <= ore.maxDepth) {
+          eligible.push(i)
+          totalWeight += ore.weight
+        }
+      }
+      if (eligible.length === 0) continue
+
+      for (let c = 0; c < COLS; c++) {
+        if (Math.random() > ORE_SPAWN_CHANCE) continue
+
+        let roll = Math.random() * totalWeight
+        let chosen = eligible[eligible.length - 1]
+        for (let j = 0; j < eligible.length; j++) {
+          const idx = eligible[j]
+          roll -= ORES[idx].weight
+          if (roll <= 0) {
+            chosen = idx
+            break
+          }
+        }
+        oreGrid[r * COLS + c] = chosen
+      }
+    }
+  }
 
   function resetWorld() {
     grid.fill(1)
+    populateOres()
+    money = 0
+    moneyText.text = formatMoney(money)
     px = WORLD_WIDTH / 2
     py = 0
     vx = 0
@@ -191,6 +306,11 @@ function createGroundScene() {
     onGround = true
     digTimer = 0
     particles.length = 0
+    for (let i = popups.length - 1; i >= 0; i--) {
+      popupsLayer.removeChild(popups[i].label)
+      popups[i].label.destroy()
+    }
+    popups.length = 0
     camX = Math.max(0, Math.min(WORLD_WIDTH - WIDTH, px - WIDTH / 2))
     camY = -HEIGHT * 0.62
     tilesDirty = true
@@ -213,8 +333,45 @@ function createGroundScene() {
     grid[idx] = 0
     tilesDirty = true
 
+    const oreIdx = oreGrid[idx]
+    oreGrid[idx] = -1
+
     const cx = col * TILE_SIZE + TILE_SIZE / 2
     const cy = row * TILE_SIZE + TILE_SIZE / 2
+
+    if (oreIdx >= 0) {
+      const ore = ORES[oreIdx]
+      money = Math.round((money + ore.value) * 100) / 100
+      moneyText.text = formatMoney(money)
+
+      const label = new Text({
+        text: `+${formatMoney(ore.value)}`,
+        style: {
+          fontFamily: 'Segoe UI, system-ui, sans-serif',
+          fontSize: 18,
+          fill: '#ffd94a',
+          fontWeight: '800',
+          stroke: { color: '#1a0830', width: 4 },
+        },
+      })
+      label.anchor.set(0.5)
+      label.position.set(cx, cy - 10)
+      popupsLayer.addChild(label)
+      popups.push({ label, life: 0.75, maxLife: 0.75 })
+
+      for (let i = 0; i < 10; i++) {
+        particles.push({
+          x: cx + (Math.random() - 0.5) * 24,
+          y: cy + (Math.random() - 0.5) * 24,
+          vx: (Math.random() - 0.5) * 220,
+          vy: -90 - Math.random() * 160,
+          size: 5 + Math.random() * 4,
+          life: 0.4 + Math.random() * 0.2,
+          color: ore.color,
+        })
+      }
+    }
+
     for (let i = 0; i < 8; i++) {
       particles.push({
         x: cx + (Math.random() - 0.5) * 28,
@@ -230,6 +387,17 @@ function createGroundScene() {
     return true
   }
 
+  function getOreSprite(poolIndex) {
+    if (poolIndex < oreSpritePool.length) {
+      return oreSpritePool[poolIndex]
+    }
+    const s = new Sprite()
+    s.anchor.set(0.5)
+    oresLayer.addChild(s)
+    oreSpritePool.push(s)
+    return s
+  }
+
   function renderVisibleTiles() {
     const startCol = Math.max(0, Math.floor(camX / TILE_SIZE))
     const endCol = Math.min(COLS - 1, Math.floor((camX + WIDTH) / TILE_SIZE))
@@ -243,26 +411,45 @@ function createGroundScene() {
     lastViewKey = viewKey
     tilesGfx.clear()
 
-    if (endRow < 0 || startRow >= ROWS) return
+    let usedSprites = 0
 
-    // Dark brown cavern wall behind dug-out underground tiles
-    const bgTop = startRow * TILE_SIZE
-    const bgHeight = (endRow - startRow + 1) * TILE_SIZE
-    tilesGfx.rect(0, bgTop, WORLD_WIDTH, bgHeight).fill(0x28180e)
+    if (endRow >= 0 && startRow < ROWS) {
+      // Dark brown cavern wall behind dug-out underground tiles
+      const bgTop = startRow * TILE_SIZE
+      const bgHeight = (endRow - startRow + 1) * TILE_SIZE
+      tilesGfx.rect(0, bgTop, WORLD_WIDTH, bgHeight).fill(0x28180e)
 
-    for (let r = startRow; r <= endRow; r++) {
-      const y = r * TILE_SIZE
-      for (let c = startCol; c <= endCol; c++) {
-        if (grid[r * COLS + c] !== 1) continue
+      for (let r = startRow; r <= endRow; r++) {
+        const y = r * TILE_SIZE
+        for (let c = startCol; c <= endCol; c++) {
+          const idx = r * COLS + c
+          if (grid[idx] !== 1) continue
 
-        const x = c * TILE_SIZE
-        const shade = brownShades[(r * 7 + c * 13) & 3]
+          const x = c * TILE_SIZE
+          const shade = brownShades[(r * 7 + c * 13) & 3]
 
-        tilesGfx
-          .rect(x, y, TILE_SIZE, TILE_SIZE)
-          .fill(shade)
-          .stroke({ color: 0x472916, width: 2, alignment: 1 })
+          tilesGfx
+            .rect(x, y, TILE_SIZE, TILE_SIZE)
+            .fill(shade)
+            .stroke({ color: 0x472916, width: 2, alignment: 1 })
+
+          const oreIdx = oreGrid[idx]
+          if (oreIdx >= 0) {
+            const ore = ORES[oreIdx]
+            const sprite = getOreSprite(usedSprites++)
+            sprite.texture = ore.texture
+            const targetSize = TILE_SIZE * 0.72
+            const maxDim = Math.max(ore.texture.width, ore.texture.height) || 1
+            sprite.scale.set(targetSize / maxDim)
+            sprite.position.set(x + TILE_SIZE / 2, y + TILE_SIZE / 2)
+            sprite.visible = true
+          }
+        }
       }
+    }
+
+    for (let i = usedSprites; i < oreSpritePool.length; i++) {
+      oreSpritePool[i].visible = false
     }
   }
 
@@ -421,6 +608,20 @@ function createGroundScene() {
       p.x += p.vx * dt
       p.y += p.vy * dt
       particlesGfx.rect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size).fill(p.color)
+    }
+
+    // Update floating money popups
+    for (let i = popups.length - 1; i >= 0; i--) {
+      const pop = popups[i]
+      pop.life -= dt
+      if (pop.life <= 0) {
+        popupsLayer.removeChild(pop.label)
+        pop.label.destroy()
+        popups.splice(i, 1)
+        continue
+      }
+      pop.label.y -= 42 * dt
+      pop.label.alpha = Math.min(1, (pop.life / pop.maxLife) * 1.4)
     }
 
     const depthTiles = Math.max(0, Math.floor(py / TILE_SIZE))
