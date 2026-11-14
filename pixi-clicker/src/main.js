@@ -34,10 +34,25 @@ import digSoundUrl from './assets/audio/dig_sound.mp3'
 import explosionSoundUrl from './assets/audio/explosion.mp3'
 import mineralPickupSoundUrl from './assets/audio/mineral_pickup.mp3'
 import cashRegisterSoundUrl from './assets/audio/cash_register.mp3'
+import btnClickSoundUrl from './assets/audio/btn_click.mp3'
 
 const sfxPools = new Map()
+let isMuted = false
+
+function setMuted(muted) {
+  isMuted = muted
+  if (isMuted) {
+    for (const pool of sfxPools.values()) {
+      for (const a of pool) {
+        a.pause()
+      }
+    }
+  }
+}
 
 function playSfx(url, volume = 0.65) {
+  if (isMuted) return
+
   let pool = sfxPools.get(url)
   if (!pool) {
     pool = []
@@ -62,6 +77,7 @@ function playSfx(url, volume = 0.65) {
 let audioCtx = null
 
 function playBackToMenuSound() {
+  if (isMuted) return
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext
     if (!AudioCtx) return
@@ -643,18 +659,24 @@ function createGroundScene(onGameOver) {
   scene.addChild(depthText)
 
   const hint = new Text({
-    text: 'A / D move & dig · S dig down · Hold W float',
+    text: 'A / D move & dig · S dig down · Hold W float · ESC pause',
     style: {
       fontFamily: 'Segoe UI, system-ui, sans-serif',
-      fontSize: 16,
+      fontSize: 15,
       fill: '#ffffff',
       fontWeight: '600',
       stroke: { color: '#1a0830', width: 4 },
     },
   })
   hint.anchor.set(1, 0)
-  hint.position.set(WIDTH - 16, 16)
+  hint.position.set(WIDTH - 122, 16)
   scene.addChild(hint)
+
+  const pauseHudBtn = createShopButton('PAUSE', 92, 30, () => {
+    togglePause()
+  })
+  pauseHudBtn.position.set(WIDTH - 108, 12)
+  scene.addChild(pauseHudBtn)
 
   // Bottom full-width dashboard bar
   const PANEL_H = 52
@@ -943,6 +965,66 @@ function createGroundScene(onGameOver) {
 
   scene.addChild(welcomeGui)
 
+  // Pause menu modal (#3A0032 background, #00FFA5 border, sharp clear #00FFA5 buttons)
+  const PAUSE_W = 360
+  const PAUSE_H = 266
+  const pauseGui = new Container()
+  pauseGui.position.set((WIDTH - PAUSE_W) / 2, (HEIGHT - PANEL_H - PAUSE_H) / 2)
+  pauseGui.visible = false
+
+  const pauseBg = new Graphics()
+    .rect(0, 0, PAUSE_W, PAUSE_H)
+    .fill({ color: 0x3a0032, alpha: 0.96 })
+    .stroke({ color: 0x00ffa5, width: 3 })
+  pauseGui.addChild(pauseBg)
+
+  const pauseTitle = new Text({
+    text: 'PAUSED',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 28,
+      fill: '#00ffa5',
+      fontWeight: '900',
+    },
+  })
+  pauseTitle.anchor.set(0.5, 0)
+  pauseTitle.position.set(PAUSE_W / 2, 20)
+  pauseGui.addChild(pauseTitle)
+
+  const resumeBtn = createShopButton('RESUME', 240, 44, () => {
+    togglePause(false)
+  })
+  resumeBtn.position.set((PAUSE_W - 240) / 2, 72)
+  pauseGui.addChild(resumeBtn)
+
+  const muteBtn = createShopButton(isMuted ? 'SOUND: MUTED' : 'SOUND: ON', 240, 44, () => {
+    setMuted(!isMuted)
+    muteBtn.setLabel(isMuted ? 'SOUND: MUTED' : 'SOUND: ON', false)
+  })
+  muteBtn.position.set((PAUSE_W - 240) / 2, 132)
+  pauseGui.addChild(muteBtn)
+
+  const quitBtn = createShopButton('QUIT GAME', 240, 44, () => {
+    pauseGui.visible = false
+    playBackToMenuSound()
+    onGameOver()
+  })
+  quitBtn.position.set((PAUSE_W - 240) / 2, 192)
+  pauseGui.addChild(quitBtn)
+
+  scene.addChild(pauseGui)
+
+  function togglePause(forceState) {
+    if (!active || exploding || welcomeGui.visible) return
+    const next = typeof forceState === 'boolean' ? forceState : !pauseGui.visible
+    pauseGui.visible = next
+    if (next) {
+      muteBtn.setLabel(isMuted ? 'SOUND: MUTED' : 'SOUND: ON', false)
+      keys.clear()
+      pressedQueue.clear()
+    }
+  }
+
   function createShopButton(label, w, h, onClick) {
     const btn = new Container()
     btn.eventMode = 'static'
@@ -986,7 +1068,10 @@ function createGroundScene(onGameOver) {
       redraw()
     })
     btn.on('pointertap', () => {
-      if (!disabled) onClick()
+      if (!disabled) {
+        playSfx(btnClickSoundUrl, 0.65)
+        onClick()
+      }
     })
 
     btn.setLabel = (newLabel, isDisabled = false) => {
@@ -1183,6 +1268,7 @@ function createGroundScene(onGameOver) {
     wasNearSave = false
     shopGui.visible = false
     saveGui.visible = false
+    pauseGui.visible = false
     welcomeGui.visible = saveData === null
     shopMessageText.text = ''
     saveStatusText.text = ''
@@ -1218,6 +1304,7 @@ function createGroundScene(onGameOver) {
     shopPrompt.visible = false
     saveGui.visible = false
     savePrompt.visible = false
+    pauseGui.visible = false
     welcomeGui.visible = false
     player.visible = false
     keys.clear()
@@ -1442,6 +1529,18 @@ function createGroundScene(onGameOver) {
       if (explosionTimer <= 0) {
         onGameOver()
       }
+      return
+    }
+
+    if (pressedQueue.has('escape') || pressedQueue.has('p')) {
+      pressedQueue.delete('escape')
+      pressedQueue.delete('p')
+      togglePause()
+      return
+    }
+
+    if (pauseGui.visible) {
+      pressedQueue.clear()
       return
     }
 
@@ -1756,6 +1855,11 @@ function createButton(label, { width, height }) {
   })
   button.on('pointerout', () => {
     redraw(false)
+  })
+  button.on('pointertap', () => {
+    if (button.enabled) {
+      playSfx(btnClickSoundUrl, 0.65)
+    }
   })
 
   return button
