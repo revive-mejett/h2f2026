@@ -265,7 +265,7 @@ const menu = createMainMenu({
     app.canvas.focus()
     menu.visible = false
     groundScene.visible = true
-    groundScene.start(null)
+    groundScene.start(null, { devMode: false })
   },
   onLoadGame: () => {
     const save = readSaveData()
@@ -274,7 +274,14 @@ const menu = createMainMenu({
     app.canvas.focus()
     menu.visible = false
     groundScene.visible = true
-    groundScene.start(save)
+    groundScene.start(save, { devMode: false })
+  },
+  onDevMode: () => {
+    window.focus()
+    app.canvas.focus()
+    menu.visible = false
+    groundScene.visible = true
+    groundScene.start(null, { devMode: true })
   },
   onCredits: () => {
     menu.visible = false
@@ -384,7 +391,7 @@ function createMenuBackdrop() {
   return backdrop
 }
 
-function createMainMenu({ onNewGame, onLoadGame, onCredits }) {
+function createMainMenu({ onNewGame, onLoadGame, onDevMode, onCredits }) {
   const scene = new Container()
   scene.addChild(createMenuBackdrop())
 
@@ -420,6 +427,15 @@ function createMainMenu({ onNewGame, onLoadGame, onCredits }) {
   creditsButton.position.set(WIDTH / 2, HEIGHT * 0.83)
   creditsButton.on('pointertap', onCredits)
   scene.addChild(creditsButton)
+
+  const devModeButton = createButton('DEV MODE', {
+    width: 118,
+    height: 32,
+    fontSize: 13,
+  })
+  devModeButton.position.set(WIDTH - 76, HEIGHT - 28)
+  devModeButton.on('pointertap', onDevMode)
+  scene.addChild(devModeButton)
 
   scene.refreshLoadState = () => {
     const hasSave = readSaveData() !== null
@@ -658,6 +674,20 @@ function createGroundScene(onGameOver) {
   depthText.position.set(16, 54)
   scene.addChild(depthText)
 
+  const devBadgeText = new Text({
+    text: 'DEV MODE (ALL ORES · SAVE OFF)',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 13,
+      fill: '#00ffa5',
+      fontWeight: '800',
+      stroke: { color: '#3a0032', width: 4 },
+    },
+  })
+  devBadgeText.position.set(16, 80)
+  devBadgeText.visible = false
+  scene.addChild(devBadgeText)
+
   const hint = new Text({
     text: 'A / D move & dig · S dig down · Hold W float · ESC pause',
     style: {
@@ -873,6 +903,10 @@ function createGroundScene(onGameOver) {
   saveGui.addChild(saveStatusText)
 
   const saveYesBtn = createShopButton('YES', 130, 42, () => {
+    if (isDevMode) {
+      saveStatusText.text = 'Save Game is disabled in DEV MODE.'
+      return
+    }
     const ok = writeSaveData(money, batteryTier)
     saveStatusText.text = ok
       ? `Saved! (${formatMoney(money)} · ${BATTERY_TIERS[batteryTier].name})`
@@ -1174,6 +1208,7 @@ function createGroundScene(onGameOver) {
 
   let money = 0
   let hasWon = false
+  let isDevMode = false
   let batteryTier = 0
   let maxFuelLiters = BASE_FUEL_LITERS
   let fuelLiters = BASE_FUEL_LITERS
@@ -1212,7 +1247,7 @@ function createGroundScene(onGameOver) {
       let totalWeight = 0
       for (let i = 0; i < ORES.length; i++) {
         const ore = ORES[i]
-        if (r >= ore.minDepth && r <= ore.maxDepth) {
+        if (isDevMode || (r >= ore.minDepth && r <= ore.maxDepth)) {
           eligible.push(i)
           totalWeight += ore.weight
         }
@@ -1305,7 +1340,10 @@ function createGroundScene(onGameOver) {
     fuelLiterText.text = `${fuelLiters.toFixed(1)} / ${maxFuelLiters} L`
   }
 
-  function resetWorld(saveData = null) {
+  function resetWorld(saveData = null, devMode = false) {
+    isDevMode = devMode
+    devBadgeText.visible = isDevMode
+    savePrompt.text = isDevMode ? 'SAVE DISABLED (DEV MODE)' : '[E] SAVE GAME'
     grid.fill(1)
     populateOres()
     for (const c of foundationCols) {
@@ -1716,15 +1754,19 @@ function createGroundScene(onGameOver) {
     // Save building proximity prompt
     const nearSave = Math.abs(px - SAVE_X) <= 78 && py >= -16 && py <= 12
     savePrompt.visible = nearSave && !saveGui.visible
-    if (nearSave && !wasNearSave) {
-      saveStatusText.text = ''
-      saveGui.visible = true
-    } else if (!nearSave && saveGui.visible) {
+    if (isDevMode) {
       saveGui.visible = false
-    }
-    if (nearSave && !saveGui.visible && (keys.has('e') || pressedQueue.has('e'))) {
-      saveStatusText.text = ''
-      saveGui.visible = true
+    } else {
+      if (nearSave && !wasNearSave) {
+        saveStatusText.text = ''
+        saveGui.visible = true
+      } else if (!nearSave && saveGui.visible) {
+        saveGui.visible = false
+      }
+      if (nearSave && !saveGui.visible && (keys.has('e') || pressedQueue.has('e'))) {
+        saveStatusText.text = ''
+        saveGui.visible = true
+      }
     }
     wasNearSave = nearSave
 
@@ -1874,9 +1916,9 @@ function createGroundScene(onGameOver) {
     depthText.text = `Depth: ${depthTiles} / ${ROWS}`
   }
 
-  scene.start = (saveData = null) => {
+  scene.start = (saveData = null, { devMode = false } = {}) => {
     active = true
-    resetWorld(saveData)
+    resetWorld(saveData, devMode)
     if (money >= WIN_TARGET_MONEY) {
       triggerWin()
     }
@@ -1897,7 +1939,7 @@ function createGroundScene(onGameOver) {
   return scene
 }
 
-function createButton(label, { width, height }) {
+function createButton(label, { width, height, fontSize = 24 }) {
   const button = new Container()
   button.eventMode = 'static'
   button.cursor = 'pointer'
@@ -1919,7 +1961,7 @@ function createButton(label, { width, height }) {
     text: label,
     style: {
       fontFamily: 'Segoe UI, system-ui, sans-serif',
-      fontSize: 24,
+      fontSize,
       fill: '#00ffa5',
       fontWeight: '800',
       stroke: { color: '#3a0032', width: 3 },
