@@ -216,23 +216,96 @@ app.stage.addChild(menu, groundScene)
 function createMainMenu({ onNewGame, onLoadGame }) {
   const scene = new Container()
 
-  const sky = new Sprite(skyTexture)
+  // Gradient sky backdrop
+  const sky = new Sprite(skyBlankTexture)
   sky.width = WIDTH
   sky.height = HEIGHT
   scene.addChild(sky)
+
+  // Non-stretchable sun (uniform scale preserves aspect ratio)
+  const sun = new Sprite(skySunTexture)
+  sun.anchor.set(0.5)
+  const sunScale = 360 / Math.max(skySunTexture.width, skySunTexture.height)
+  sun.scale.set(sunScale)
+  sun.position.set(WIDTH / 2, HEIGHT * 0.52)
+  scene.addChild(sun)
+
+  // Landscape background: distant ridge, city skyline, and synthwave horizon ground
+  const horizonY = HEIGHT * 0.72
+
+  const city = new Sprite(skyCityTexture)
+  city.anchor.set(0.5, 1)
+  const cityScale = WIDTH / (skyCityTexture.width || 1)
+  city.scale.set(cityScale)
+  city.position.set(WIDTH / 2, horizonY + 18)
+  city.alpha = 0.85
+  scene.addChild(city)
+
+  const landscape = new Graphics()
+  // Rolling hills silhouette along the horizon
+  landscape
+    .moveTo(0, horizonY)
+    .lineTo(130, horizonY - 26)
+    .lineTo(290, horizonY - 8)
+    .lineTo(440, horizonY - 22)
+    .lineTo(620, horizonY - 6)
+    .lineTo(800, horizonY - 30)
+    .lineTo(WIDTH, horizonY - 10)
+    .lineTo(WIDTH, HEIGHT)
+    .lineTo(0, HEIGHT)
+    .closePath()
+    .fill(0x1f052c)
+
+  // Horizon glow line
+  landscape.rect(0, horizonY, WIDTH, 3).fill(0x00ffa5)
+
+  // Synthwave perspective grid lines across the ground
+  const vpX = WIDTH / 2
+  const vpY = horizonY - 40
+  for (let i = -8; i <= 8; i++) {
+    const bottomX = vpX + i * 115
+    const t = (horizonY - vpY) / (HEIGHT - vpY)
+    const startX = vpX + (bottomX - vpX) * t
+    landscape
+      .moveTo(startX, horizonY)
+      .lineTo(bottomX, HEIGHT)
+      .stroke({ color: 0x7f006e, width: 1.5, alpha: 0.75 })
+  }
+  const rowFractions = [0.06, 0.14, 0.24, 0.37, 0.54, 0.75]
+  for (const f of rowFractions) {
+    const y = horizonY + (HEIGHT - horizonY) * f
+    landscape.moveTo(0, y).lineTo(WIDTH, y).stroke({ color: 0x7f006e, width: 1.5, alpha: 0.7 })
+  }
+  scene.addChild(landscape)
+
+  // Bigger palm trees framing the main menu
+  const menuPalms = [
+    { x: 64, y: HEIGHT + 6, height: 340, flip: 1 },
+    { x: 168, y: HEIGHT + 10, height: 270, flip: -1 },
+    { x: WIDTH - 168, y: HEIGHT + 10, height: 270, flip: 1 },
+    { x: WIDTH - 64, y: HEIGHT + 6, height: 340, flip: -1 },
+  ]
+  for (const p of menuPalms) {
+    const palm = new Sprite(palmTreeTexture)
+    palm.anchor.set(0.5, 1)
+    const s = p.height / (palmTreeTexture.height || 1)
+    palm.scale.set(s * p.flip, s)
+    palm.position.set(p.x, p.y)
+    scene.addChild(palm)
+  }
 
   const title = new Sprite(titleTexture)
   title.anchor.set(0.5)
   const titleScale = Math.min(0.85, (WIDTH * 0.72) / titleTexture.width)
   title.scale.set(titleScale)
-  title.position.set(WIDTH / 2, HEIGHT * 0.30)
+  title.position.set(WIDTH / 2, HEIGHT * 0.27)
   scene.addChild(title)
 
   const newGameButton = createButton('NEW GAME', {
     width: 240,
     height: 58,
   })
-  newGameButton.position.set(WIDTH / 2, HEIGHT * 0.66)
+  newGameButton.position.set(WIDTH / 2, HEIGHT * 0.63)
   newGameButton.on('pointertap', onNewGame)
   scene.addChild(newGameButton)
 
@@ -240,7 +313,7 @@ function createMainMenu({ onNewGame, onLoadGame }) {
     width: 240,
     height: 58,
   })
-  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.81)
+  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.78)
   loadGameButton.on('pointertap', () => {
     if (loadGameButton.enabled) onLoadGame()
   })
