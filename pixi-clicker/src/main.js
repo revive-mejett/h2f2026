@@ -35,13 +35,37 @@ import explosionSoundUrl from './assets/audio/explosion.mp3'
 import mineralPickupSoundUrl from './assets/audio/mineral_pickup.mp3'
 import cashRegisterSoundUrl from './assets/audio/cash_register.mp3'
 import btnClickSoundUrl from './assets/audio/btn_click.mp3'
+import jetpackSoundUrl from './assets/audio/jetpack.mp3'
 
 const sfxPools = new Map()
 let isMuted = false
 
+const jetpackAudio = new Audio(jetpackSoundUrl)
+jetpackAudio.loop = true
+jetpackAudio.volume = 0.55
+
+function startJetpackSfx(ramp = 0) {
+  if (isMuted) {
+    if (!jetpackAudio.paused) jetpackAudio.pause()
+    return
+  }
+  jetpackAudio.volume = 0.42 + 0.23 * Math.max(0, Math.min(1, ramp))
+  if (jetpackAudio.paused) {
+    jetpackAudio.play().catch(() => {})
+  }
+}
+
+function stopJetpackSfx() {
+  if (!jetpackAudio.paused) {
+    jetpackAudio.pause()
+    jetpackAudio.currentTime = 0
+  }
+}
+
 function setMuted(muted) {
   isMuted = muted
   if (isMuted) {
+    stopJetpackSfx()
     for (const pool of sfxPools.values()) {
       for (const a of pool) {
         a.pause()
@@ -221,6 +245,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('blur', () => {
   keys.clear()
   pressedQueue.clear()
+  stopJetpackSfx()
 })
 
 const SAVE_KEY = '2k_dollar_mining_save'
@@ -1106,6 +1131,7 @@ function createGroundScene(onGameOver) {
     const next = typeof forceState === 'boolean' ? forceState : !pauseGui.visible
     pauseGui.visible = next
     if (next) {
+      stopJetpackSfx()
       muteBtn.setLabel(isMuted ? 'SOUND: MUTED' : 'SOUND: ON', false)
       keys.clear()
       pressedQueue.clear()
@@ -1358,6 +1384,7 @@ function createGroundScene(onGameOver) {
     fuelLiters = maxFuelLiters
     drawFuelBar()
     wHoldTime = 0
+    stopJetpackSfx()
     wasNearShop = false
     wasNearSave = false
     shopGui.visible = false
@@ -1394,6 +1421,7 @@ function createGroundScene(onGameOver) {
     if (exploding) return
     exploding = true
     explosionTimer = 1.3
+    stopJetpackSfx()
     playSfx(explosionSoundUrl, 0.8)
     shopGui.visible = false
     shopPrompt.visible = false
@@ -1442,6 +1470,7 @@ function createGroundScene(onGameOver) {
   function triggerWin() {
     if (hasWon || exploding) return
     hasWon = true
+    stopJetpackSfx()
     shopGui.visible = false
     shopPrompt.visible = false
     saveGui.visible = false
@@ -1717,6 +1746,7 @@ function createGroundScene(onGameOver) {
 
       vy = Math.max(maxUpSpeed, vy - (currentThrust - GRAVITY) * dt)
       fuelLiters = Math.max(0, fuelLiters - fuelBurnLps * dt)
+      startJetpackSfx(ramp)
 
       if (Math.random() < 0.45 + 0.45 * ramp) {
         particles.push({
@@ -1731,6 +1761,7 @@ function createGroundScene(onGameOver) {
       }
     } else {
       wHoldTime = 0
+      stopJetpackSfx()
       vy = Math.min(MAX_FALL_SPEED, vy + GRAVITY * dt)
     }
 
@@ -1933,6 +1964,7 @@ function createGroundScene(onGameOver) {
 
   scene.stop = () => {
     active = false
+    stopJetpackSfx()
     app.ticker.remove(update)
   }
 
