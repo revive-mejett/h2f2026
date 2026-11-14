@@ -1,5 +1,5 @@
 import './style.css'
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js'
+import { Application, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js'
 import skyUrl from './assets/sky.png'
 import skyBlankUrl from './assets/sky_blank.png'
 import skyCityUrl from './assets/sky_city.png'
@@ -10,6 +10,13 @@ import ufoUrl from './assets/ufo.png'
 import moneyUrl from './assets/ore_money.png'
 import gaugeFuelUrl from './assets/gauge_fuel.png'
 import buildingRefuelUrl from './assets/building_refuel.png'
+import buildingUpgradeShopUrl from './assets/building_upgradeshop.png'
+import batteryBasicUrl from './assets/item_battery_basic.png'
+import batteryMediumUrl from './assets/item_battery_medium.png'
+import batteryMegaUrl from './assets/item_battery_mega.png'
+import batteryGigaUrl from './assets/item_battery_giga.png'
+import batteryTeraUrl from './assets/item_battery_tera.png'
+import batteryConcordiaUrl from './assets/item_battery_concordia.png'
 import bronzeUrl from './assets/ore_bronze.png'
 import concordiaiumUrl from './assets/ore_concordiaium.png'
 import copperUrl from './assets/ore_copper.png'
@@ -70,6 +77,15 @@ await app.init({
 root.appendChild(app.canvas)
 app.canvas.setAttribute('tabindex', '0')
 
+const BATTERY_URLS = [
+  batteryBasicUrl,
+  batteryMediumUrl,
+  batteryMegaUrl,
+  batteryGigaUrl,
+  batteryTeraUrl,
+  batteryConcordiaUrl,
+]
+
 const [
   skyTexture,
   skyBlankTexture,
@@ -81,7 +97,8 @@ const [
   moneyTexture,
   gaugeFuelTexture,
   buildingRefuelTexture,
-  ...oreTextures
+  buildingUpgradeShopTexture,
+  ...restTextures
 ] = await Promise.all([
   loadTexture(skyUrl),
   loadTexture(skyBlankUrl),
@@ -93,8 +110,13 @@ const [
   loadTexture(moneyUrl),
   loadTexture(gaugeFuelUrl),
   loadTexture(buildingRefuelUrl),
+  loadTexture(buildingUpgradeShopUrl),
+  ...BATTERY_URLS.map((url) => loadTexture(url)),
   ...ORE_DEFS.map((o) => loadTexture(o.url)),
 ])
+
+const batteryTextures = restTextures.slice(0, BATTERY_URLS.length)
+const oreTextures = restTextures.slice(BATTERY_URLS.length)
 
 const ORES = ORE_DEFS.map((def, i) => ({
   ...def,
@@ -236,6 +258,29 @@ function createGroundScene(onGameOver) {
   refuelStation.position.set(REFUEL_X, 0)
   world.addChild(refuelStation)
 
+  const SHOP_X = 960
+  const upgradeShop = new Sprite(buildingUpgradeShopTexture)
+  upgradeShop.anchor.set(0.5, 1)
+  const shopScale = 170 / Math.max(buildingUpgradeShopTexture.width, buildingUpgradeShopTexture.height)
+  upgradeShop.scale.set(shopScale)
+  upgradeShop.position.set(SHOP_X, 0)
+  world.addChild(upgradeShop)
+
+  const shopPrompt = new Text({
+    text: '[E] BATTERY SHOP',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 15,
+      fill: '#00ffa5',
+      fontWeight: '800',
+      stroke: { color: '#3a0032', width: 4 },
+    },
+  })
+  shopPrompt.anchor.set(0.5, 1)
+  shopPrompt.position.set(SHOP_X, -upgradeShop.height - 6)
+  shopPrompt.visible = false
+  world.addChild(shopPrompt)
+
   const particlesGfx = new Graphics()
   world.addChild(particlesGfx)
 
@@ -325,7 +370,189 @@ function createGroundScene(onGameOver) {
   fuelBarGfx.position.set(52, (PANEL_H - FUEL_BAR_H) / 2)
   gaugePanel.addChild(fuelBarGfx)
 
+  const fuelLiterText = new Text({
+    text: '100.0 / 100 L',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 16,
+      fill: '#00ff74',
+      fontWeight: '800',
+      stroke: { color: '#1a0830', width: 3 },
+    },
+  })
+  fuelLiterText.anchor.set(0, 0.5)
+  fuelLiterText.position.set(52 + FUEL_BAR_W + 12, PANEL_H / 2)
+  gaugePanel.addChild(fuelLiterText)
+
+  const hudBatteryIcon = new Sprite(batteryTextures[0])
+  hudBatteryIcon.anchor.set(0.5)
+  hudBatteryIcon.position.set(52 + FUEL_BAR_W + 165, PANEL_H / 2)
+  gaugePanel.addChild(hudBatteryIcon)
+
   scene.addChild(gaugePanel)
+
+  const BATTERY_TIERS = [
+    { name: 'Basic', liters: 100, cost: 0, texture: batteryTextures[0] },
+    { name: 'Medium', liters: 175, cost: 1.25, texture: batteryTextures[1] },
+    { name: 'Mega', liters: 250, cost: 4.00, texture: batteryTextures[2] },
+    { name: 'Giga', liters: 350, cost: 16.00, texture: batteryTextures[3] },
+    { name: 'Tera', liters: 600, cost: 40.00, texture: batteryTextures[4] },
+    { name: 'Concordia', liters: 1000, cost: 110.00, texture: batteryTextures[5] },
+  ]
+
+  // Shop GUI modal (#3A0032 background, #00FFA5 border, sharp clear #00FFA5 buttons)
+  const SHOP_W = 500
+  const SHOP_H = 396
+  const shopGui = new Container()
+  shopGui.position.set((WIDTH - SHOP_W) / 2, (HEIGHT - PANEL_H - SHOP_H) / 2)
+  shopGui.visible = false
+
+  const shopBg = new Graphics()
+    .rect(0, 0, SHOP_W, SHOP_H)
+    .fill(0x3a0032)
+    .stroke({ color: 0x00ffa5, width: 3 })
+  shopGui.addChild(shopBg)
+
+  const shopTitle = new Text({
+    text: 'BATTERY SHOP',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 24,
+      fill: '#00ffa5',
+      fontWeight: '900',
+    },
+  })
+  shopTitle.position.set(20, 14)
+  shopGui.addChild(shopTitle)
+
+  const shopCloseBtn = createShopButton('CLOSE', 88, 32, () => {
+    shopGui.visible = false
+  })
+  shopCloseBtn.position.set(SHOP_W - 108, 14)
+  shopGui.addChild(shopCloseBtn)
+
+  const shopCurrentIcon = new Sprite(batteryTextures[0])
+  shopCurrentIcon.anchor.set(0.5)
+  shopCurrentIcon.position.set(34, 60)
+  shopGui.addChild(shopCurrentIcon)
+
+  const shopCurrentText = new Text({
+    text: 'Equipped: Basic Battery (100 L)',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 15,
+      fill: '#00ffa5',
+      fontWeight: '600',
+    },
+  })
+  shopCurrentText.anchor.set(0, 0.5)
+  shopCurrentText.position.set(56, 60)
+  shopGui.addChild(shopCurrentText)
+
+  const shopMessageText = new Text({
+    text: '',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 15,
+      fill: '#00ffa5',
+      fontWeight: '700',
+    },
+  })
+  shopMessageText.anchor.set(0.5, 0)
+  shopMessageText.position.set(SHOP_W / 2, SHOP_H - 34)
+  shopGui.addChild(shopMessageText)
+
+  const shopRows = []
+  for (let i = 1; i < BATTERY_TIERS.length; i++) {
+    const tier = BATTERY_TIERS[i]
+    const rowY = 90 + (i - 1) * 52
+
+    const rowIcon = new Sprite(tier.texture)
+    rowIcon.anchor.set(0.5)
+    const iconScale = 36 / Math.max(tier.texture.width, tier.texture.height)
+    rowIcon.scale.set(iconScale)
+    rowIcon.position.set(38, rowY + 20)
+    shopGui.addChild(rowIcon)
+
+    const rowLabel = new Text({
+      text: `${tier.name} Battery - ${tier.liters} L`,
+      style: {
+        fontFamily: 'Segoe UI, system-ui, sans-serif',
+        fontSize: 18,
+        fill: '#00ffa5',
+        fontWeight: '700',
+      },
+    })
+    rowLabel.anchor.set(0, 0.5)
+    rowLabel.position.set(66, rowY + 20)
+    shopGui.addChild(rowLabel)
+
+    const buyBtn = createShopButton(`BUY ${formatMoney(tier.cost)}`, 152, 40, () => {
+      buyBattery(i)
+    })
+    buyBtn.position.set(SHOP_W - 172, rowY)
+    shopGui.addChild(buyBtn)
+
+    shopRows.push({ tierIndex: i, buyBtn })
+  }
+
+  scene.addChild(shopGui)
+
+  function createShopButton(label, w, h, onClick) {
+    const btn = new Container()
+    btn.eventMode = 'static'
+    btn.cursor = 'pointer'
+    btn.hitArea = new Rectangle(0, 0, w, h)
+
+    const border = new Graphics()
+    const txt = new Text({
+      text: label,
+      style: {
+        fontFamily: 'Segoe UI, system-ui, sans-serif',
+        fontSize: 15,
+        fill: '#00ffa5',
+        fontWeight: '800',
+      },
+    })
+    txt.anchor.set(0.5)
+    txt.position.set(w / 2, h / 2)
+
+    let disabled = false
+    let hovered = false
+
+    function redraw() {
+      border.clear()
+      border
+        .rect(0, 0, w, h)
+        .stroke({ color: 0x00ffa5, width: hovered && !disabled ? 3 : 2 })
+      txt.alpha = disabled ? 0.5 : 1
+      border.alpha = disabled ? 0.5 : 1
+    }
+
+    redraw()
+    btn.addChild(border, txt)
+
+    btn.on('pointerover', () => {
+      hovered = true
+      redraw()
+    })
+    btn.on('pointerout', () => {
+      hovered = false
+      redraw()
+    })
+    btn.on('pointertap', () => {
+      if (!disabled) onClick()
+    })
+
+    btn.setLabel = (newLabel, isDisabled = false) => {
+      txt.text = newLabel
+      disabled = isDisabled
+      btn.cursor = disabled ? 'default' : 'pointer'
+      redraw()
+    }
+
+    return btn
+  }
 
   const grid = new Uint8Array(COLS * ROWS)
   const oreGrid = new Int8Array(COLS * ROWS)
@@ -342,13 +569,16 @@ function createGroundScene(onGameOver) {
   const MIN_PY = -HEIGHT * 0.4
   const DIG_COOLDOWN = 0.14
   const ORE_SPAWN_CHANCE = 0.22
-  const MAX_FUEL = 100
-  const FUEL_BURN_FLOAT = 14
-  const FUEL_BURN_DIG = 1.2
-  const FUEL_REFILL_RATE = 55
+  const BASE_FUEL_LITERS = 100
+  const FUEL_BURN_FLOAT_LPS = 14
+  const FUEL_BURN_DIG_LITERS = 1.5
+  const FUEL_REFILL_LPS = 55
 
   let money = 0
-  let fuel = MAX_FUEL
+  let batteryTier = 0
+  let maxFuelLiters = BASE_FUEL_LITERS
+  let fuelLiters = BASE_FUEL_LITERS
+  let wasNearShop = false
   let px = WORLD_WIDTH / 2
   let py = 0
   let vx = 0
@@ -406,8 +636,56 @@ function createGroundScene(onGameOver) {
     }
   }
 
+  function refreshShopUi() {
+    const current = BATTERY_TIERS[batteryTier]
+    shopCurrentText.text = `Equipped: ${current.name} Battery (${current.liters} L)`
+
+    shopCurrentIcon.texture = current.texture
+    shopCurrentIcon.scale.set(26 / Math.max(current.texture.width, current.texture.height))
+
+    hudBatteryIcon.texture = current.texture
+    hudBatteryIcon.scale.set(32 / Math.max(current.texture.width, current.texture.height))
+
+    for (const row of shopRows) {
+      const tier = BATTERY_TIERS[row.tierIndex]
+      if (batteryTier >= row.tierIndex) {
+        row.buyBtn.setLabel(batteryTier === row.tierIndex ? 'EQUIPPED' : 'OWNED', true)
+      } else {
+        row.buyBtn.setLabel(`BUY ${formatMoney(tier.cost)}`, false)
+      }
+    }
+  }
+
+  function buyBattery(tierIndex) {
+    if (batteryTier >= tierIndex) {
+      shopMessageText.style.fill = '#00ffa5'
+      shopMessageText.text = 'You already have this battery or better!'
+      return
+    }
+
+    const tier = BATTERY_TIERS[tierIndex]
+    if (money < tier.cost) {
+      const needed = tier.cost - money
+      shopMessageText.style.fill = '#ff5c8a'
+      shopMessageText.text = `Not enough money! Need ${formatMoney(needed)} more.`
+      return
+    }
+
+    money = Math.round((money - tier.cost) * 100) / 100
+    moneyText.text = formatMoney(money)
+
+    batteryTier = tierIndex
+    maxFuelLiters = tier.liters
+    fuelLiters = maxFuelLiters
+    drawFuelBar()
+    refreshShopUi()
+
+    shopMessageText.style.fill = '#00ffa5'
+    shopMessageText.text = `Bought ${tier.name} Battery (${tier.liters} L)!`
+  }
+
   function drawFuelBar() {
-    const ratio = Math.max(0, Math.min(1, fuel / MAX_FUEL))
+    const ratio = Math.max(0, Math.min(1, fuelLiters / maxFuelLiters))
     const fillW = Math.round(FUEL_BAR_W * ratio)
 
     fuelBarGfx.clear()
@@ -421,6 +699,8 @@ function createGroundScene(onGameOver) {
     fuelBarGfx
       .rect(0, 0, FUEL_BAR_W, FUEL_BAR_H)
       .stroke({ color: 0x00ff74, width: 2.5 })
+
+    fuelLiterText.text = `${fuelLiters.toFixed(1)} / ${maxFuelLiters} L`
   }
 
   function resetWorld() {
@@ -428,8 +708,14 @@ function createGroundScene(onGameOver) {
     populateOres()
     money = 0
     moneyText.text = formatMoney(money)
-    fuel = MAX_FUEL
+    batteryTier = 0
+    maxFuelLiters = BASE_FUEL_LITERS
+    fuelLiters = maxFuelLiters
     drawFuelBar()
+    wasNearShop = false
+    shopGui.visible = false
+    shopMessageText.text = ''
+    refreshShopUi()
     px = WORLD_WIDTH / 2
     py = 0
     vx = 0
@@ -456,6 +742,8 @@ function createGroundScene(onGameOver) {
     if (exploding) return
     exploding = true
     explosionTimer = 1.3
+    shopGui.visible = false
+    shopPrompt.visible = false
     player.visible = false
     keys.clear()
     pressedQueue.clear()
@@ -691,7 +979,7 @@ function createGroundScene(onGameOver) {
       if (targetCol >= 0 && targetCol < COLS && bodyRow >= 0 && isSolid(targetCol, bodyRow)) {
         if (digTile(targetCol, bodyRow)) {
           digTimer = DIG_COOLDOWN
-          fuel = Math.max(0, fuel - FUEL_BURN_DIG)
+          fuelLiters = Math.max(0, fuelLiters - FUEL_BURN_DIG_LITERS)
         }
       }
     }
@@ -702,19 +990,19 @@ function createGroundScene(onGameOver) {
       if (digTile(playerCol, belowRow)) {
         digTimer = DIG_COOLDOWN
         onGround = false
-        fuel = Math.max(0, fuel - FUEL_BURN_DIG)
+        fuelLiters = Math.max(0, fuelLiters - FUEL_BURN_DIG_LITERS)
       }
     }
 
     vx = moveDir * MOVE_SPEED
 
-    if (wDown && fuel > 0) {
+    if (wDown && fuelLiters > 0) {
       if (onGround) {
         vy = -160
         onGround = false
       }
       vy = Math.max(MAX_FLOAT_SPEED, vy - (FLOAT_THRUST - GRAVITY) * dt)
-      fuel = Math.max(0, fuel - FUEL_BURN_FLOAT * dt)
+      fuelLiters = Math.max(0, fuelLiters - FUEL_BURN_FLOAT_LPS * dt)
 
       if (Math.random() < 0.6) {
         particles.push({
@@ -733,8 +1021,8 @@ function createGroundScene(onGameOver) {
 
     // Refill only at the surface refuel station
     const atRefuelStation = Math.abs(px - REFUEL_X) <= 72 && py >= -12 && py <= 8
-    if (atRefuelStation && fuel < MAX_FUEL) {
-      fuel = Math.min(MAX_FUEL, fuel + FUEL_REFILL_RATE * dt)
+    if (atRefuelStation && fuelLiters < maxFuelLiters) {
+      fuelLiters = Math.min(maxFuelLiters, fuelLiters + FUEL_REFILL_LPS * dt)
       if (Math.random() < 0.35) {
         particles.push({
           x: px + (Math.random() - 0.5) * 32,
@@ -748,9 +1036,26 @@ function createGroundScene(onGameOver) {
       }
     }
 
+    // Upgrade shop proximity prompt
+    const nearShop = Math.abs(px - SHOP_X) <= 78 && py >= -16 && py <= 12
+    shopPrompt.visible = nearShop && !shopGui.visible
+    if (nearShop && !wasNearShop) {
+      shopMessageText.text = ''
+      refreshShopUi()
+      shopGui.visible = true
+    } else if (!nearShop && shopGui.visible) {
+      shopGui.visible = false
+    }
+    if (nearShop && !shopGui.visible && (keys.has('e') || pressedQueue.has('e'))) {
+      shopMessageText.text = ''
+      refreshShopUi()
+      shopGui.visible = true
+    }
+    wasNearShop = nearShop
+
     drawFuelBar()
 
-    if (fuel <= 0) {
+    if (fuelLiters <= 0) {
       triggerExplosion()
     }
 
