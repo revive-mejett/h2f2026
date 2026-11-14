@@ -2,12 +2,14 @@ import './style.css'
 import { Application, Assets, Container, Graphics, Sprite, Text } from 'pixi.js'
 import skyUrl from './assets/sky.png'
 import titleUrl from './assets/title.png'
+import ufoUrl from './assets/ufo.png'
 
 const app = new Application()
 const root = document.querySelector('#app')
 
 const WIDTH = 960
 const HEIGHT = 540
+const GROUND_HEIGHT = 80
 
 await app.init({
   width: WIDTH,
@@ -19,20 +21,31 @@ await app.init({
 
 root.appendChild(app.canvas)
 
-const [skyTexture, titleTexture] = await Promise.all([
+const [skyTexture, titleTexture, ufoTexture] = await Promise.all([
   Assets.load(skyUrl),
   Assets.load(titleUrl),
+  Assets.load(ufoUrl),
 ])
+
+const keys = new Set()
+
+window.addEventListener('keydown', (e) => {
+  keys.add(e.key.toLowerCase())
+})
+window.addEventListener('keyup', (e) => {
+  keys.delete(e.key.toLowerCase())
+})
 
 const menu = createMainMenu(() => {
   menu.visible = false
-  game.visible = true
+  groundScene.visible = true
+  groundScene.start()
 })
 
-const game = createClickerGame()
-game.visible = false
+const groundScene = createGroundScene()
+groundScene.visible = false
 
-app.stage.addChild(menu, game)
+app.stage.addChild(menu, groundScene)
 
 function createMainMenu(onStart) {
   const scene = new Container()
@@ -63,48 +76,100 @@ function createMainMenu(onStart) {
   return scene
 }
 
-function createClickerGame() {
+function createGroundScene() {
   const scene = new Container()
+  const groundTop = HEIGHT - GROUND_HEIGHT
 
   const sky = new Sprite(skyTexture)
   sky.width = WIDTH
   sky.height = HEIGHT
   scene.addChild(sky)
 
-  let score = 0
+  const ground = new Graphics()
+    .rect(0, groundTop, WIDTH, GROUND_HEIGHT)
+    .fill('#3d2b1f')
+  ground
+    .rect(0, groundTop, WIDTH, 12)
+    .fill('#5a8f3a')
+  scene.addChild(ground)
 
-  const scoreText = new Text({
-    text: 'Score: 0',
+  const player = new Sprite(ufoTexture)
+  player.anchor.set(0.5, 1)
+  const playerScale = 0.35
+  player.scale.set(playerScale)
+  player.position.set(WIDTH / 2, groundTop)
+  scene.addChild(player)
+
+  const hint = new Text({
+    text: 'A / D move · W jump',
     style: {
       fontFamily: 'Segoe UI, system-ui, sans-serif',
-      fontSize: 42,
+      fontSize: 18,
       fill: '#ffffff',
       fontWeight: '600',
     },
   })
-  scoreText.anchor.set(0.5)
-  scoreText.position.set(WIDTH / 2, HEIGHT / 2 - 100)
-  scene.addChild(scoreText)
+  hint.anchor.set(0.5, 0)
+  hint.position.set(WIDTH / 2, 16)
+  hint.alpha = 0.85
+  scene.addChild(hint)
 
-  const clickButton = createButton('Click me!', {
-    width: 220,
-    height: 80,
-    fill: '#3d7eff',
-    hover: '#5a93ff',
-    textColor: '#ffffff',
-  })
-  clickButton.position.set(WIDTH / 2, HEIGHT / 2 + 20)
+  const MOVE_SPEED = 280
+  const JUMP_VELOCITY = -520
+  const GRAVITY = 1400
 
-  clickButton.on('pointerdown', () => {
-    score += 1
-    scoreText.text = `Score: ${score}`
-    clickButton.scale.set(0.92)
-  })
-  clickButton.on('pointerup', () => clickButton.scale.set(1))
-  clickButton.on('pointerupoutside', () => clickButton.scale.set(1))
-  clickButton.on('pointerout', () => clickButton.scale.set(1))
+  let vx = 0
+  let vy = 0
+  let onGround = true
+  let active = false
+  let jumpLocked = false
 
-  scene.addChild(clickButton)
+  function update(ticker) {
+    if (!active) return
+
+    const dt = ticker.deltaMS / 1000
+
+    vx = 0
+    if (keys.has('a')) vx -= MOVE_SPEED
+    if (keys.has('d')) vx += MOVE_SPEED
+
+    if (keys.has('w') && onGround && !jumpLocked) {
+      vy = JUMP_VELOCITY
+      onGround = false
+      jumpLocked = true
+    }
+    if (!keys.has('w')) jumpLocked = false
+
+    vy += GRAVITY * dt
+
+    player.x += vx * dt
+    player.y += vy * dt
+
+    const halfW = (player.width * 0.5) * 0.7
+    player.x = Math.max(halfW, Math.min(WIDTH - halfW, player.x))
+
+    if (player.y >= groundTop) {
+      player.y = groundTop
+      vy = 0
+      onGround = true
+    }
+  }
+
+  scene.start = () => {
+    active = true
+    player.position.set(WIDTH / 2, groundTop)
+    vx = 0
+    vy = 0
+    onGround = true
+    jumpLocked = false
+    app.ticker.add(update)
+  }
+
+  scene.stop = () => {
+    active = false
+    app.ticker.remove(update)
+  }
+
   return scene
 }
 
