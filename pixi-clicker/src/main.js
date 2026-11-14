@@ -8,6 +8,8 @@ import palmTreeUrl from './assets/palm_tree.png'
 import titleUrl from './assets/title.png'
 import ufoUrl from './assets/ufo.png'
 import moneyUrl from './assets/ore_money.png'
+import gaugeFuelUrl from './assets/gauge_fuel.png'
+import buildingRefuelUrl from './assets/building_refuel.png'
 import bronzeUrl from './assets/ore_bronze.png'
 import concordiaiumUrl from './assets/ore_concordiaium.png'
 import copperUrl from './assets/ore_copper.png'
@@ -77,6 +79,8 @@ const [
   titleTexture,
   ufoTexture,
   moneyTexture,
+  gaugeFuelTexture,
+  buildingRefuelTexture,
   ...oreTextures
 ] = await Promise.all([
   loadTexture(skyUrl),
@@ -87,6 +91,8 @@ const [
   loadTexture(titleUrl),
   loadTexture(ufoUrl),
   loadTexture(moneyUrl),
+  loadTexture(gaugeFuelUrl),
+  loadTexture(buildingRefuelUrl),
   ...ORE_DEFS.map((o) => loadTexture(o.url)),
 ])
 
@@ -125,7 +131,11 @@ const menu = createMainMenu(() => {
   groundScene.start()
 })
 
-const groundScene = createGroundScene()
+const groundScene = createGroundScene(() => {
+  groundScene.stop()
+  groundScene.visible = false
+  menu.visible = true
+})
 groundScene.visible = false
 
 app.stage.addChild(menu, groundScene)
@@ -159,7 +169,7 @@ function createMainMenu(onStart) {
   return scene
 }
 
-function createGroundScene() {
+function createGroundScene(onGameOver) {
   const scene = new Container()
 
   const sky = new Sprite(skyBlankTexture)
@@ -217,6 +227,14 @@ function createGroundScene() {
 
   const oresLayer = new Container()
   world.addChild(oresLayer)
+
+  const REFUEL_X = 320
+  const refuelStation = new Sprite(buildingRefuelTexture)
+  refuelStation.anchor.set(0.5, 1)
+  const refuelScale = 140 / Math.max(buildingRefuelTexture.width, buildingRefuelTexture.height)
+  refuelStation.scale.set(refuelScale)
+  refuelStation.position.set(REFUEL_X, 0)
+  world.addChild(refuelStation)
 
   const particlesGfx = new Graphics()
   world.addChild(particlesGfx)
@@ -283,6 +301,32 @@ function createGroundScene() {
   hint.position.set(WIDTH - 16, 16)
   scene.addChild(hint)
 
+  // Bottom full-width dashboard bar
+  const PANEL_H = 52
+  const FUEL_BAR_W = 220
+  const FUEL_BAR_H = 20
+
+  const gaugePanel = new Container()
+  gaugePanel.position.set(0, HEIGHT - PANEL_H)
+
+  const panelBg = new Graphics()
+    .rect(0, 0, WIDTH, PANEL_H)
+    .fill(0x7f006e)
+  gaugePanel.addChild(panelBg)
+
+  const fuelIcon = new Sprite(gaugeFuelTexture)
+  fuelIcon.anchor.set(0.5)
+  const fuelIconScale = 30 / Math.max(gaugeFuelTexture.width, gaugeFuelTexture.height)
+  fuelIcon.scale.set(fuelIconScale)
+  fuelIcon.position.set(28, PANEL_H / 2)
+  gaugePanel.addChild(fuelIcon)
+
+  const fuelBarGfx = new Graphics()
+  fuelBarGfx.position.set(52, (PANEL_H - FUEL_BAR_H) / 2)
+  gaugePanel.addChild(fuelBarGfx)
+
+  scene.addChild(gaugePanel)
+
   const grid = new Uint8Array(COLS * ROWS)
   const oreGrid = new Int8Array(COLS * ROWS)
   const brownShades = [0x78492a, 0x6e4225, 0x825130, 0x673e22]
@@ -298,14 +342,21 @@ function createGroundScene() {
   const MIN_PY = -HEIGHT * 0.4
   const DIG_COOLDOWN = 0.14
   const ORE_SPAWN_CHANCE = 0.22
+  const MAX_FUEL = 100
+  const FUEL_BURN_FLOAT = 14
+  const FUEL_BURN_DIG = 1.2
+  const FUEL_REFILL_RATE = 55
 
   let money = 0
+  let fuel = MAX_FUEL
   let px = WORLD_WIDTH / 2
   let py = 0
   let vx = 0
   let vy = 0
   let onGround = true
   let active = false
+  let exploding = false
+  let explosionTimer = 0
   let digTimer = 0
   let camX = 0
   let camY = -HEIGHT * 0.62
@@ -355,16 +406,38 @@ function createGroundScene() {
     }
   }
 
+  function drawFuelBar() {
+    const ratio = Math.max(0, Math.min(1, fuel / MAX_FUEL))
+    const fillW = Math.round(FUEL_BAR_W * ratio)
+
+    fuelBarGfx.clear()
+    // Black background when empty
+    fuelBarGfx.rect(0, 0, FUEL_BAR_W, FUEL_BAR_H).fill(0x000000)
+
+    if (fillW > 0) {
+      fuelBarGfx.rect(0, 0, fillW, FUEL_BAR_H).fill(0x00ff74)
+    }
+
+    fuelBarGfx
+      .rect(0, 0, FUEL_BAR_W, FUEL_BAR_H)
+      .stroke({ color: 0x00ff74, width: 2.5 })
+  }
+
   function resetWorld() {
     grid.fill(1)
     populateOres()
     money = 0
     moneyText.text = formatMoney(money)
+    fuel = MAX_FUEL
+    drawFuelBar()
     px = WORLD_WIDTH / 2
     py = 0
     vx = 0
     vy = 0
     onGround = true
+    exploding = false
+    explosionTimer = 0
+    player.visible = true
     digTimer = 0
     particles.length = 0
     for (let i = popups.length - 1; i >= 0; i--) {
@@ -377,6 +450,47 @@ function createGroundScene() {
     tilesDirty = true
     lastViewKey = ''
     player.position.set(px, py)
+  }
+
+  function triggerExplosion() {
+    if (exploding) return
+    exploding = true
+    explosionTimer = 1.3
+    player.visible = false
+    keys.clear()
+    pressedQueue.clear()
+
+    const ex = px
+    const ey = py - PLAYER_H / 2
+    const boomColors = [0xff4500, 0xff9900, 0xffea00, 0xffffff, 0x00e5c0]
+    for (let i = 0; i < 42; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const speed = 70 + Math.random() * 280
+      particles.push({
+        x: ex + (Math.random() - 0.5) * 16,
+        y: ey + (Math.random() - 0.5) * 16,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 60,
+        size: 6 + Math.random() * 8,
+        life: 0.6 + Math.random() * 0.5,
+        color: boomColors[i % boomColors.length],
+      })
+    }
+
+    const label = new Text({
+      text: 'OUT OF FUEL!',
+      style: {
+        fontFamily: 'Segoe UI, system-ui, sans-serif',
+        fontSize: 24,
+        fill: '#ff4d4d',
+        fontWeight: '900',
+        stroke: { color: '#12081c', width: 5 },
+      },
+    })
+    label.anchor.set(0.5)
+    label.position.set(ex, ey - 18)
+    popupsLayer.addChild(label)
+    popups.push({ label, life: 1.2, maxLife: 1.2 })
   }
 
   function isSolid(col, row) {
@@ -519,6 +633,43 @@ function createGroundScene() {
     if (!active) return
 
     const dt = Math.min(0.05, ticker.deltaMS / 1000)
+
+    if (exploding) {
+      explosionTimer -= dt
+
+      particlesGfx.clear()
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]
+        p.life -= dt
+        if (p.life <= 0) {
+          particles.splice(i, 1)
+          continue
+        }
+        p.vy += 450 * dt
+        p.x += p.vx * dt
+        p.y += p.vy * dt
+        particlesGfx.rect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size).fill(p.color)
+      }
+
+      for (let i = popups.length - 1; i >= 0; i--) {
+        const pop = popups[i]
+        pop.life -= dt
+        if (pop.life <= 0) {
+          popupsLayer.removeChild(pop.label)
+          pop.label.destroy()
+          popups.splice(i, 1)
+          continue
+        }
+        pop.label.y -= 32 * dt
+        pop.label.alpha = Math.min(1, (pop.life / pop.maxLife) * 1.4)
+      }
+
+      if (explosionTimer <= 0) {
+        onGameOver()
+      }
+      return
+    }
+
     if (digTimer > 0) digTimer = Math.max(0, digTimer - dt)
 
     const aDown = keys.has('a') || pressedQueue.has('a')
@@ -540,6 +691,7 @@ function createGroundScene() {
       if (targetCol >= 0 && targetCol < COLS && bodyRow >= 0 && isSolid(targetCol, bodyRow)) {
         if (digTile(targetCol, bodyRow)) {
           digTimer = DIG_COOLDOWN
+          fuel = Math.max(0, fuel - FUEL_BURN_DIG)
         }
       }
     }
@@ -550,17 +702,19 @@ function createGroundScene() {
       if (digTile(playerCol, belowRow)) {
         digTimer = DIG_COOLDOWN
         onGround = false
+        fuel = Math.max(0, fuel - FUEL_BURN_DIG)
       }
     }
 
     vx = moveDir * MOVE_SPEED
 
-    if (wDown) {
+    if (wDown && fuel > 0) {
       if (onGround) {
         vy = -160
         onGround = false
       }
       vy = Math.max(MAX_FLOAT_SPEED, vy - (FLOAT_THRUST - GRAVITY) * dt)
+      fuel = Math.max(0, fuel - FUEL_BURN_FLOAT * dt)
 
       if (Math.random() < 0.6) {
         particles.push({
@@ -575,6 +729,29 @@ function createGroundScene() {
       }
     } else {
       vy = Math.min(MAX_FALL_SPEED, vy + GRAVITY * dt)
+    }
+
+    // Refill only at the surface refuel station
+    const atRefuelStation = Math.abs(px - REFUEL_X) <= 72 && py >= -12 && py <= 8
+    if (atRefuelStation && fuel < MAX_FUEL) {
+      fuel = Math.min(MAX_FUEL, fuel + FUEL_REFILL_RATE * dt)
+      if (Math.random() < 0.35) {
+        particles.push({
+          x: px + (Math.random() - 0.5) * 32,
+          y: py - 10 - Math.random() * 26,
+          vx: (Math.random() - 0.5) * 20,
+          vy: -40 - Math.random() * 40,
+          size: 4 + Math.random() * 3,
+          life: 0.3 + Math.random() * 0.15,
+          color: 0x00ff74,
+        })
+      }
+    }
+
+    drawFuelBar()
+
+    if (fuel <= 0) {
+      triggerExplosion()
     }
 
     pressedQueue.clear()
