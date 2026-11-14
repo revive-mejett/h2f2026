@@ -664,6 +664,65 @@ function createGroundScene(onGameOver) {
 
   scene.addChild(saveGui)
 
+  // New Game welcome briefing modal (#3A0032 background, #00FFA5 border, sharp clear button)
+  const WELCOME_W = 680
+  const WELCOME_H = 440
+  const welcomeGui = new Container()
+  welcomeGui.position.set((WIDTH - WELCOME_W) / 2, (HEIGHT - PANEL_H - WELCOME_H) / 2)
+  welcomeGui.visible = false
+
+  const welcomeBg = new Graphics()
+    .rect(0, 0, WELCOME_W, WELCOME_H)
+    .fill(0x3a0032)
+    .stroke({ color: 0x00ffa5, width: 3 })
+  welcomeGui.addChild(welcomeBg)
+
+  const welcomeHeading = new Text({
+    text: 'Welcome to Planet 2005!',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 22,
+      fill: '#00ffa5',
+      fontWeight: '900',
+    },
+  })
+  welcomeHeading.anchor.set(0.5, 0)
+  welcomeHeading.position.set(WELCOME_W / 2, 16)
+  welcomeGui.addChild(welcomeHeading)
+
+  const welcomeBody = new Text({
+    text:
+      "Pretty cool, right? Welcome to your new home! Planet 2005 is almost as livable as Earth... just a little bit chilly.\n\n" +
+      "We've successfully colonized this planet, but there's one tiny problem: we're short on $2,005!\n\n" +
+      "That's where YOU come in.\n\n" +
+      "Your mission is simple: mine valuable resources, collect minerals, and earn $2,005 to fund our newest project: COLONIZATION! With enough funding, we'll finally be able to make Planet 2005 fully livable. And who knows? Maybe we'll even make algotime possible!\n\n" +
+      "⛽ Watch your fuel! Running low? Make sure to refuel whenever necessary. You don't want to get stranded out there!\n\n" +
+      "💎 Keep an eye out for rare minerals! SCSium and Concordiaium are the rarest and most valuable resources on this planet. Finding them could make a HUGE difference!\n\n" +
+      "Good luck, miner. We've got a planet to build, and you're our best hope.\n\n" +
+      "Now get out there and start digging!",
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 13.5,
+      lineHeight: 17.5,
+      fill: '#e6fff7',
+      fontWeight: '600',
+      wordWrap: true,
+      wordWrapWidth: WELCOME_W - 44,
+    },
+  })
+  welcomeBody.position.set(22, 48)
+  welcomeGui.addChild(welcomeBody)
+
+  const welcomeReadyBtn = createShopButton("I'm ready!", 176, 40, () => {
+    welcomeGui.visible = false
+    keys.clear()
+    pressedQueue.clear()
+  })
+  welcomeReadyBtn.position.set((WELCOME_W - 176) / 2, WELCOME_H - 52)
+  welcomeGui.addChild(welcomeReadyBtn)
+
+  scene.addChild(welcomeGui)
+
   function createShopButton(label, w, h, onClick) {
     const btn = new Container()
     btn.eventMode = 'static'
@@ -903,6 +962,7 @@ function createGroundScene(onGameOver) {
     wasNearSave = false
     shopGui.visible = false
     saveGui.visible = false
+    welcomeGui.visible = saveData === null
     shopMessageText.text = ''
     saveStatusText.text = ''
     refreshShopUi()
@@ -936,6 +996,7 @@ function createGroundScene(onGameOver) {
     shopPrompt.visible = false
     saveGui.visible = false
     savePrompt.visible = false
+    welcomeGui.visible = false
     player.visible = false
     keys.clear()
     pressedQueue.clear()
@@ -1161,6 +1222,11 @@ function createGroundScene(onGameOver) {
     }
 
     if (digTimer > 0) digTimer = Math.max(0, digTimer - dt)
+
+    if (welcomeGui.visible) {
+      pressedQueue.clear()
+      return
+    }
 
     const aDown = keys.has('a') || pressedQueue.has('a')
     const dDown = keys.has('d') || pressedQueue.has('d')
