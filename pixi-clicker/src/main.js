@@ -1,6 +1,10 @@
 import './style.css'
 import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js'
 import skyUrl from './assets/sky.png'
+import skyBlankUrl from './assets/sky_blank.png'
+import skyCityUrl from './assets/sky_city.png'
+import skySunUrl from './assets/sky_sun.png'
+import palmTreeUrl from './assets/palm_tree.png'
 import titleUrl from './assets/title.png'
 import ufoUrl from './assets/ufo.png'
 import moneyUrl from './assets/ore_money.png'
@@ -27,18 +31,18 @@ function loadTexture(url) {
 }
 
 const ORE_DEFS = [
-  { id: 'iron', name: 'Iron', value: 0.15, minDepth: 0, maxDepth: 150, url: ironUrl, color: 0xb8c0c8 },
-  { id: 'copper', name: 'Copper', value: 0.20, minDepth: 0, maxDepth: 3000, url: copperUrl, color: 0xe07a3c },
-  { id: 'bronze', name: 'Bronze', value: 0.25, minDepth: 0, maxDepth: 150, url: bronzeUrl, color: 0xcd7f32 },
-  { id: 'silver', name: 'Silver', value: 0.60, minDepth: 25, maxDepth: 300, url: silverUrl, color: 0xd9e4ec },
-  { id: 'gold', name: 'Gold', value: 1.15, minDepth: 50, maxDepth: 1000, url: goldUrl, color: 0xffd700 },
-  { id: 'mythril', name: 'Mythril', value: 2.30, minDepth: 100, maxDepth: 3000, url: mythrilUrl, color: 0xc084fc },
-  { id: 'ruby', name: 'Ruby', value: 11.50, minDepth: 150, maxDepth: 3000, url: rubyUrl, color: 0xf43f5e },
-  { id: 'sapphire', name: 'Sapphire', value: 27.50, minDepth: 225, maxDepth: 3000, url: sapphireUrl, color: 0x3b82f6 },
-  { id: 'emerald', name: 'Emerald', value: 48.50, minDepth: 280, maxDepth: 3000, url: emeraldUrl, color: 0x10b981 },
-  { id: 'diamond', name: 'Diamond', value: 120.00, minDepth: 300, maxDepth: 3000, url: diamondUrl, color: 0x22d3ee },
-  { id: 'concordiaium', name: 'Concordiaium', value: 350.67, minDepth: 900, maxDepth: 3000, url: concordiaiumUrl, color: 0xf472b6 },
-  { id: 'scsium', name: 'Scsium', value: 1000.67, minDepth: 1000, maxDepth: 3000, url: scsiumUrl, color: 0xfacc15 },
+  { id: 'iron', name: 'Iron', value: 0.15, minDepth: 0, maxDepth: 150, url: ironUrl, color: 0x7b93ab, textColor: '#9ab4cc' },
+  { id: 'copper', name: 'Copper', value: 0.20, minDepth: 0, maxDepth: 3000, url: copperUrl, color: 0xd96b18, textColor: '#f28730' },
+  { id: 'bronze', name: 'Bronze', value: 0.25, minDepth: 0, maxDepth: 150, url: bronzeUrl, color: 0xf08c00, textColor: '#ffa726' },
+  { id: 'silver', name: 'Silver', value: 0.60, minDepth: 25, maxDepth: 300, url: silverUrl, color: 0xe2e8f0, textColor: '#f1f5f9' },
+  { id: 'gold', name: 'Gold', value: 1.15, minDepth: 50, maxDepth: 1000, url: goldUrl, color: 0xffea00, textColor: '#ffea00' },
+  { id: 'mythril', name: 'Mythril', value: 2.30, minDepth: 100, maxDepth: 3000, url: mythrilUrl, color: 0xd896ff, textColor: '#e2a6ff' },
+  { id: 'ruby', name: 'Ruby', value: 11.50, minDepth: 150, maxDepth: 3000, url: rubyUrl, color: 0xff2a2a, textColor: '#ff5252' },
+  { id: 'sapphire', name: 'Sapphire', value: 27.50, minDepth: 225, maxDepth: 3000, url: sapphireUrl, color: 0x3b6eff, textColor: '#6b94ff' },
+  { id: 'emerald', name: 'Emerald', value: 48.50, minDepth: 280, maxDepth: 3000, url: emeraldUrl, color: 0x00ff44, textColor: '#3dff70' },
+  { id: 'diamond', name: 'Diamond', value: 120.00, minDepth: 300, maxDepth: 3000, url: diamondUrl, color: 0x22f3ff, textColor: '#5cf7ff' },
+  { id: 'concordiaium', name: 'Concordiaium', value: 350.67, minDepth: 900, maxDepth: 3000, url: concordiaiumUrl, color: 0xff1e6e, textColor: '#ff3d82' },
+  { id: 'scsium', name: 'Scsium', value: 1000.67, minDepth: 1000, maxDepth: 3000, url: scsiumUrl, color: 0x3df5d4, textColor: '#52ffe0', strokeColor: '#4c0b6e' },
 ]
 
 const app = new Application()
@@ -64,8 +68,22 @@ await app.init({
 root.appendChild(app.canvas)
 app.canvas.setAttribute('tabindex', '0')
 
-const [skyTexture, titleTexture, ufoTexture, moneyTexture, ...oreTextures] = await Promise.all([
+const [
+  skyTexture,
+  skyBlankTexture,
+  skyCityTexture,
+  skySunTexture,
+  palmTreeTexture,
+  titleTexture,
+  ufoTexture,
+  moneyTexture,
+  ...oreTextures
+] = await Promise.all([
   loadTexture(skyUrl),
+  loadTexture(skyBlankUrl),
+  loadTexture(skyCityUrl),
+  loadTexture(skySunUrl),
+  loadTexture(palmTreeUrl),
   loadTexture(titleUrl),
   loadTexture(ufoUrl),
   loadTexture(moneyUrl),
@@ -144,10 +162,52 @@ function createMainMenu(onStart) {
 function createGroundScene() {
   const scene = new Container()
 
-  const sky = new Sprite(skyTexture)
+  const sky = new Sprite(skyBlankTexture)
   sky.width = WIDTH
   sky.height = HEIGHT
   scene.addChild(sky)
+
+  const sun = new Sprite(skySunTexture)
+  sun.anchor.set(0.5)
+  const sunScale = (WIDTH * 0.42) / skySunTexture.width
+  sun.scale.set(sunScale)
+  const sunBaseX = WIDTH * 0.5
+  const sunBaseY = HEIGHT * 0.42
+  sun.position.set(sunBaseX, sunBaseY)
+  scene.addChild(sun)
+
+  // City silhouette in front of sky_blank and sun
+  const cityLayer = new Container()
+  const cityScale = (WIDTH * 1.15) / (skyCityTexture.width || 1)
+  const cityStep = skyCityTexture.width * cityScale
+  for (let i = 0; i < 2; i++) {
+    const city = new Sprite(skyCityTexture)
+    city.anchor.set(0, 1)
+    city.scale.set(cityScale)
+    city.position.set(i * cityStep, 0)
+    cityLayer.addChild(city)
+  }
+  scene.addChild(cityLayer)
+
+  // Palm trees in front of sky_city along the surface horizon
+  const palmsLayer = new Container()
+  const palmPlacements = [
+    { x: 90, height: 170, flip: 1 },
+    { x: 250, height: 135, flip: -1 },
+    { x: 470, height: 160, flip: 1 },
+    { x: 710, height: 185, flip: -1 },
+    { x: 920, height: 145, flip: 1 },
+    { x: 1150, height: 175, flip: -1 },
+  ]
+  for (const p of palmPlacements) {
+    const palm = new Sprite(palmTreeTexture)
+    palm.anchor.set(0.5, 1)
+    const s = p.height / (palmTreeTexture.height || 1)
+    palm.scale.set(s * p.flip, s)
+    palm.position.set(p.x, 4)
+    palmsLayer.addChild(palm)
+  }
+  scene.addChild(palmsLayer)
 
   const world = new Container()
   scene.addChild(world)
@@ -249,6 +309,7 @@ function createGroundScene() {
   let digTimer = 0
   let camX = 0
   let camY = -HEIGHT * 0.62
+  let sunTime = 0
   let tilesDirty = true
   let lastViewKey = ''
 
@@ -345,19 +406,20 @@ function createGroundScene() {
       moneyText.text = formatMoney(money)
 
       const label = new Text({
-        text: `+${formatMoney(ore.value)}`,
+        text: `${ore.name} +${formatMoney(ore.value)}`,
         style: {
           fontFamily: 'Segoe UI, system-ui, sans-serif',
           fontSize: 18,
-          fill: '#ffd94a',
+          fill: ore.textColor,
           fontWeight: '800',
-          stroke: { color: '#1a0830', width: 4 },
+          stroke: { color: ore.strokeColor ?? '#12081c', width: 4 },
         },
       })
       label.anchor.set(0.5)
-      label.position.set(cx, cy - 10)
+      const clampedX = Math.max(76, Math.min(WORLD_WIDTH - 76, cx))
+      label.position.set(clampedX, cy - 10)
       popupsLayer.addChild(label)
-      popups.push({ label, life: 0.75, maxLife: 0.75 })
+      popups.push({ label, life: 1.0, maxLife: 1.0 })
 
       for (let i = 0; i < 10; i++) {
         particles.push({
@@ -593,6 +655,16 @@ function createGroundScene() {
 
     world.position.set(-Math.round(camX), -Math.round(camY))
 
+    sunTime += dt
+    sun.x = sunBaseX - (camX - (WORLD_WIDTH - WIDTH) / 2) * 0.12
+    sun.y = sunBaseY - Math.max(0, camY + HEIGHT * 0.62) * 0.25 + Math.sin(sunTime * 1.4) * 6
+
+    const surfaceY = -Math.round(camY)
+    cityLayer.x = -Math.round(camX * 0.35)
+    cityLayer.y = surfaceY + 8
+    palmsLayer.x = -Math.round(camX * 0.75)
+    palmsLayer.y = surfaceY
+
     renderVisibleTiles()
 
     // Update dig particles
@@ -633,6 +705,10 @@ function createGroundScene() {
     resetWorld()
     renderVisibleTiles()
     world.position.set(-Math.round(camX), -Math.round(camY))
+    cityLayer.x = -Math.round(camX * 0.35)
+    cityLayer.y = -Math.round(camY) + 8
+    palmsLayer.x = -Math.round(camX * 0.75)
+    palmsLayer.y = -Math.round(camY)
     app.ticker.add(update)
   }
 
