@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "zip": "powershell -NoProfile -Command \"Push-Location dist; tar -a -c -f ../game.zip *; Pop-Location\""
   },
   "dependencies": {
     "pixi.js": "^8.23.0"

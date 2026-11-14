@@ -1,8 +1,17 @@
 import './style.css'
-import { Application, Assets, Container, Graphics, Sprite, Text } from 'pixi.js'
+import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js'
 import skyUrl from './assets/sky.png'
 import titleUrl from './assets/title.png'
 import ufoUrl from './assets/ufo.png'
+
+function loadTexture(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(Texture.from(img))
+    img.onerror = (err) => reject(err)
+    img.src = url
+  })
+}
 
 const app = new Application()
 const root = document.querySelector('#app')
@@ -20,11 +29,12 @@ await app.init({
 })
 
 root.appendChild(app.canvas)
+app.canvas.setAttribute('tabindex', '0')
 
 const [skyTexture, titleTexture, ufoTexture] = await Promise.all([
-  Assets.load(skyUrl),
-  Assets.load(titleUrl),
-  Assets.load(ufoUrl),
+  loadTexture(skyUrl),
+  loadTexture(titleUrl),
+  loadTexture(ufoUrl),
 ])
 
 const keys = new Set()
@@ -37,6 +47,8 @@ window.addEventListener('keyup', (e) => {
 })
 
 const menu = createMainMenu(() => {
+  window.focus()
+  app.canvas.focus()
   menu.visible = false
   groundScene.visible = true
   groundScene.start()
