@@ -1,60 +1,86 @@
 import './style.css'
-import heroImg from './assets/hero.png'
-import javascriptLogo from './assets/javascript.svg'
-import viteLogo from './assets/vite.svg'
-import { setupCounter } from './counter.js'
+import { Application, Container, Graphics, Text } from 'pixi.js'
 
-document.querySelector('#app').innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${javascriptLogo}" class="framework" alt="JavaScript logo"/>
-    <img src="${viteLogo}" class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.js</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+const app = new Application()
+const root = document.querySelector('#app')
 
-<div class="ticks"></div>
+// Fixed size works reliably inside itch.io's iframe (window resize can be 0x0)
+const WIDTH = 960
+const HEIGHT = 540
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src="${viteLogo}" alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-          <img class="button-icon" src="${javascriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+await app.init({
+  width: WIDTH,
+  height: HEIGHT,
+  background: '#1a1f2e',
+  antialias: true,
+  preference: 'webgl',
+})
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+root.appendChild(app.canvas)
 
-setupCounter(document.querySelector('#counter'))
+let score = 0
+
+const scoreText = new Text({
+  text: 'Score: 0',
+  style: {
+    fontFamily: 'Segoe UI, system-ui, sans-serif',
+    fontSize: 42,
+    fill: '#f0f4ff',
+    fontWeight: '600',
+  },
+})
+scoreText.anchor.set(0.5)
+
+const button = new Container()
+button.eventMode = 'static'
+button.cursor = 'pointer'
+
+const buttonBg = new Graphics()
+  .roundRect(-110, -40, 220, 80, 16)
+  .fill('#3d7eff')
+
+const buttonLabel = new Text({
+  text: 'Click me!',
+  style: {
+    fontFamily: 'Segoe UI, system-ui, sans-serif',
+    fontSize: 28,
+    fill: '#ffffff',
+    fontWeight: '700',
+  },
+})
+buttonLabel.anchor.set(0.5)
+
+button.addChild(buttonBg, buttonLabel)
+
+function layout() {
+  scoreText.position.set(WIDTH / 2, HEIGHT / 2 - 100)
+  button.position.set(WIDTH / 2, HEIGHT / 2 + 20)
+}
+
+layout()
+
+button.on('pointerdown', () => {
+  score += 1
+  scoreText.text = `Score: ${score}`
+
+  button.scale.set(0.92)
+})
+
+button.on('pointerup', () => {
+  button.scale.set(1)
+})
+
+button.on('pointerupoutside', () => {
+  button.scale.set(1)
+})
+
+button.on('pointerover', () => {
+  buttonBg.clear().roundRect(-110, -40, 220, 80, 16).fill('#5a93ff')
+})
+
+button.on('pointerout', () => {
+  buttonBg.clear().roundRect(-110, -40, 220, 80, 16).fill('#3d7eff')
+  button.scale.set(1)
+})
+
+app.stage.addChild(scoreText, button)
