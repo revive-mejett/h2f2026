@@ -10,6 +10,7 @@ import ufoUrl from './assets/ufo.png'
 import moneyUrl from './assets/ore_money.png'
 import gaugeFuelUrl from './assets/gauge_fuel.png'
 import buildingRefuelUrl from './assets/building_refuel.png'
+import buildingSaveUrl from './assets/building_save.png'
 import buildingUpgradeShopUrl from './assets/building_upgradeshop.png'
 import batteryBasicUrl from './assets/item_battery_basic.png'
 import batteryMediumUrl from './assets/item_battery_medium.png'
@@ -97,6 +98,7 @@ const [
   moneyTexture,
   gaugeFuelTexture,
   buildingRefuelTexture,
+  buildingSaveTexture,
   buildingUpgradeShopTexture,
   ...restTextures
 ] = await Promise.all([
@@ -110,6 +112,7 @@ const [
   loadTexture(moneyUrl),
   loadTexture(gaugeFuelUrl),
   loadTexture(buildingRefuelUrl),
+  loadTexture(buildingSaveUrl),
   loadTexture(buildingUpgradeShopUrl),
   ...BATTERY_URLS.map((url) => loadTexture(url)),
   ...ORE_DEFS.map((o) => loadTexture(o.url)),
@@ -145,24 +148,72 @@ window.addEventListener('blur', () => {
   pressedQueue.clear()
 })
 
-const menu = createMainMenu(() => {
-  window.focus()
-  app.canvas.focus()
-  menu.visible = false
-  groundScene.visible = true
-  groundScene.start()
+const SAVE_KEY = '2k_dollar_mining_save'
+
+function readSaveData() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return null
+    const money = Number.isFinite(parsed.money) && parsed.money >= 0 ? parsed.money : 0
+    const batteryTier = Number.isInteger(parsed.batteryTier)
+      ? Math.max(0, Math.min(BATTERY_URLS.length - 1, parsed.batteryTier))
+      : 0
+    return { money, batteryTier }
+  } catch {
+    return null
+  }
+}
+
+function writeSaveData(money, batteryTier) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ money, batteryTier }))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function clearSaveData() {
+  try {
+    localStorage.removeItem(SAVE_KEY)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const menu = createMainMenu({
+  onNewGame: () => {
+    clearSaveData()
+    window.focus()
+    app.canvas.focus()
+    menu.visible = false
+    groundScene.visible = true
+    groundScene.start(null)
+  },
+  onLoadGame: () => {
+    const save = readSaveData()
+    if (!save) return
+    window.focus()
+    app.canvas.focus()
+    menu.visible = false
+    groundScene.visible = true
+    groundScene.start(save)
+  },
 })
 
 const groundScene = createGroundScene(() => {
   groundScene.stop()
   groundScene.visible = false
+  menu.refreshLoadState()
   menu.visible = true
 })
 groundScene.visible = false
 
 app.stage.addChild(menu, groundScene)
 
-function createMainMenu(onStart) {
+function createMainMenu({ onNewGame, onLoadGame }) {
   const scene = new Container()
 
   const sky = new Sprite(skyTexture)
@@ -174,19 +225,42 @@ function createMainMenu(onStart) {
   title.anchor.set(0.5)
   const titleScale = Math.min(0.85, (WIDTH * 0.72) / titleTexture.width)
   title.scale.set(titleScale)
-  title.position.set(WIDTH / 2, HEIGHT * 0.32)
+  title.position.set(WIDTH / 2, HEIGHT * 0.30)
   scene.addChild(title)
 
-  const startButton = createButton('START', {
-    width: 220,
-    height: 72,
+  const newGameButton = createButton('NEW GAME', {
+    width: 240,
+    height: 64,
     fill: '#00e5c0',
     hover: '#5ffff0',
     textColor: '#1a0830',
   })
-  startButton.position.set(WIDTH / 2, HEIGHT * 0.72)
-  startButton.on('pointertap', onStart)
-  scene.addChild(startButton)
+  newGameButton.position.set(WIDTH / 2, HEIGHT * 0.66)
+  newGameButton.on('pointertap', onNewGame)
+  scene.addChild(newGameButton)
+
+  const loadGameButton = createButton('LOAD GAME', {
+    width: 240,
+    height: 58,
+    fill: '#3a0032',
+    hover: '#58004c',
+    textColor: '#00ffa5',
+    stroke: '#00ffa5',
+  })
+  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.82)
+  loadGameButton.on('pointertap', () => {
+    if (loadGameButton.enabled) onLoadGame()
+  })
+  scene.addChild(loadGameButton)
+
+  scene.refreshLoadState = () => {
+    const hasSave = readSaveData() !== null
+    loadGameButton.enabled = hasSave
+    loadGameButton.alpha = hasSave ? 1 : 0.45
+    loadGameButton.cursor = hasSave ? 'pointer' : 'default'
+  }
+
+  scene.refreshLoadState()
 
   return scene
 }
@@ -250,13 +324,36 @@ function createGroundScene(onGameOver) {
   const oresLayer = new Container()
   world.addChild(oresLayer)
 
-  const REFUEL_X = 320
+  const REFUEL_X = 280
   const refuelStation = new Sprite(buildingRefuelTexture)
   refuelStation.anchor.set(0.5, 1)
   const refuelScale = 140 / Math.max(buildingRefuelTexture.width, buildingRefuelTexture.height)
   refuelStation.scale.set(refuelScale)
   refuelStation.position.set(REFUEL_X, 0)
   world.addChild(refuelStation)
+
+  const SAVE_X = 680
+  const saveStation = new Sprite(buildingSaveTexture)
+  saveStation.anchor.set(0.5, 1)
+  const saveScale = 155 / Math.max(buildingSaveTexture.width, buildingSaveTexture.height)
+  saveStation.scale.set(saveScale)
+  saveStation.position.set(SAVE_X, 0)
+  world.addChild(saveStation)
+
+  const savePrompt = new Text({
+    text: '[E] SAVE GAME',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 15,
+      fill: '#00ffa5',
+      fontWeight: '800',
+      stroke: { color: '#3a0032', width: 4 },
+    },
+  })
+  savePrompt.anchor.set(0.5, 1)
+  savePrompt.position.set(SAVE_X, -saveStation.height - 6)
+  savePrompt.visible = false
+  world.addChild(savePrompt)
 
   const SHOP_X = 960
   const upgradeShop = new Sprite(buildingUpgradeShopTexture)
@@ -498,6 +595,82 @@ function createGroundScene(onGameOver) {
 
   scene.addChild(shopGui)
 
+  // Save prompt modal (#3A0032 background, #00FFA5 border, sharp clear #00FFA5 YES/NO buttons)
+  const SAVE_MODAL_W = 430
+  const SAVE_MODAL_H = 178
+  const saveGui = new Container()
+  saveGui.position.set((WIDTH - SAVE_MODAL_W) / 2, (HEIGHT - PANEL_H - SAVE_MODAL_H) / 2)
+  saveGui.visible = false
+
+  const saveBg = new Graphics()
+    .rect(0, 0, SAVE_MODAL_W, SAVE_MODAL_H)
+    .fill(0x3a0032)
+    .stroke({ color: 0x00ffa5, width: 3 })
+  saveGui.addChild(saveBg)
+
+  const saveQuestion = new Text({
+    text: 'Would you like to save your progress?',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 20,
+      fill: '#00ffa5',
+      fontWeight: '800',
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: SAVE_MODAL_W - 40,
+    },
+  })
+  saveQuestion.anchor.set(0.5, 0)
+  saveQuestion.position.set(SAVE_MODAL_W / 2, 24)
+  saveGui.addChild(saveQuestion)
+
+  const saveStatusText = new Text({
+    text: '',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 14,
+      fill: '#00ffa5',
+      fontWeight: '700',
+    },
+  })
+  saveStatusText.anchor.set(0.5, 0)
+  saveStatusText.position.set(SAVE_MODAL_W / 2, 138)
+  saveGui.addChild(saveStatusText)
+
+  const saveYesBtn = createShopButton('YES', 130, 42, () => {
+    const ok = writeSaveData(money, batteryTier)
+    saveStatusText.text = ok
+      ? `Saved! (${formatMoney(money)} · ${BATTERY_TIERS[batteryTier].name})`
+      : 'Could not write save data.'
+    saveGui.visible = false
+    if (ok) {
+      const label = new Text({
+        text: 'PROGRESS SAVED!',
+        style: {
+          fontFamily: 'Segoe UI, system-ui, sans-serif',
+          fontSize: 18,
+          fill: '#00ffa5',
+          fontWeight: '900',
+          stroke: { color: '#3a0032', width: 4 },
+        },
+      })
+      label.anchor.set(0.5)
+      label.position.set(SAVE_X, -saveStation.height - 16)
+      popupsLayer.addChild(label)
+      popups.push({ label, life: 1.1, maxLife: 1.1 })
+    }
+  })
+  saveYesBtn.position.set(SAVE_MODAL_W / 2 - 144, 84)
+  saveGui.addChild(saveYesBtn)
+
+  const saveNoBtn = createShopButton('NO', 130, 42, () => {
+    saveGui.visible = false
+  })
+  saveNoBtn.position.set(SAVE_MODAL_W / 2 + 14, 84)
+  saveGui.addChild(saveNoBtn)
+
+  scene.addChild(saveGui)
+
   function createShopButton(label, w, h, onClick) {
     const btn = new Container()
     btn.eventMode = 'static'
@@ -579,6 +752,7 @@ function createGroundScene(onGameOver) {
   let maxFuelLiters = BASE_FUEL_LITERS
   let fuelLiters = BASE_FUEL_LITERS
   let wasNearShop = false
+  let wasNearSave = false
   let px = WORLD_WIDTH / 2
   let py = 0
   let vx = 0
@@ -703,20 +877,23 @@ function createGroundScene(onGameOver) {
     fuelLiterText.text = `${fuelLiters.toFixed(1)} / ${maxFuelLiters} L`
   }
 
-  function resetWorld() {
+  function resetWorld(saveData = null) {
     grid.fill(1)
     populateOres()
-    money = 0
+    money = saveData ? saveData.money : 0
     moneyText.text = formatMoney(money)
-    batteryTier = 0
-    maxFuelLiters = BASE_FUEL_LITERS
+    batteryTier = saveData ? saveData.batteryTier : 0
+    maxFuelLiters = BATTERY_TIERS[batteryTier].liters
     fuelLiters = maxFuelLiters
     drawFuelBar()
     wasNearShop = false
+    wasNearSave = false
     shopGui.visible = false
+    saveGui.visible = false
     shopMessageText.text = ''
+    saveStatusText.text = ''
     refreshShopUi()
-    px = WORLD_WIDTH / 2
+    px = 480
     py = 0
     vx = 0
     vy = 0
@@ -744,6 +921,8 @@ function createGroundScene(onGameOver) {
     explosionTimer = 1.3
     shopGui.visible = false
     shopPrompt.visible = false
+    saveGui.visible = false
+    savePrompt.visible = false
     player.visible = false
     keys.clear()
     pressedQueue.clear()
@@ -1036,6 +1215,21 @@ function createGroundScene(onGameOver) {
       }
     }
 
+    // Save building proximity prompt
+    const nearSave = Math.abs(px - SAVE_X) <= 78 && py >= -16 && py <= 12
+    savePrompt.visible = nearSave && !saveGui.visible
+    if (nearSave && !wasNearSave) {
+      saveStatusText.text = ''
+      saveGui.visible = true
+    } else if (!nearSave && saveGui.visible) {
+      saveGui.visible = false
+    }
+    if (nearSave && !saveGui.visible && (keys.has('e') || pressedQueue.has('e'))) {
+      saveStatusText.text = ''
+      saveGui.visible = true
+    }
+    wasNearSave = nearSave
+
     // Upgrade shop proximity prompt
     const nearShop = Math.abs(px - SHOP_X) <= 78 && py >= -16 && py <= 12
     shopPrompt.visible = nearShop && !shopGui.visible
@@ -1182,9 +1376,9 @@ function createGroundScene(onGameOver) {
     depthText.text = `Depth: ${depthTiles} / ${ROWS}`
   }
 
-  scene.start = () => {
+  scene.start = (saveData = null) => {
     active = true
-    resetWorld()
+    resetWorld(saveData)
     renderVisibleTiles()
     world.position.set(-Math.round(camX), -Math.round(camY))
     cityLayer.x = -Math.round(camX * 0.35)
@@ -1202,20 +1396,27 @@ function createGroundScene(onGameOver) {
   return scene
 }
 
-function createButton(label, { width, height, fill, hover, textColor }) {
+function createButton(label, { width, height, fill, hover, textColor, stroke }) {
   const button = new Container()
   button.eventMode = 'static'
   button.cursor = 'pointer'
+  button.enabled = true
+
+  function drawBg(color) {
+    bg.clear().roundRect(-width / 2, -height / 2, width, height, 16).fill(color)
+    if (stroke) {
+      bg.stroke({ color: stroke, width: 3 })
+    }
+  }
 
   const bg = new Graphics()
-    .roundRect(-width / 2, -height / 2, width, height, 16)
-    .fill(fill)
+  drawBg(fill)
 
   const text = new Text({
     text: label,
     style: {
       fontFamily: 'Segoe UI, system-ui, sans-serif',
-      fontSize: 28,
+      fontSize: 26,
       fill: textColor,
       fontWeight: '700',
     },
@@ -1225,10 +1426,10 @@ function createButton(label, { width, height, fill, hover, textColor }) {
   button.addChild(bg, text)
 
   button.on('pointerover', () => {
-    bg.clear().roundRect(-width / 2, -height / 2, width, height, 16).fill(hover)
+    if (button.enabled) drawBg(hover)
   })
   button.on('pointerout', () => {
-    bg.clear().roundRect(-width / 2, -height / 2, width, height, 16).fill(fill)
+    drawBg(fill)
   })
 
   return button
