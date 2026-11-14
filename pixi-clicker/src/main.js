@@ -1199,6 +1199,7 @@ function createGroundScene(onGameOver) {
 
   const grid = new Uint8Array(COLS * ROWS)
   const oreGrid = new Int8Array(COLS * ROWS)
+  const oreRotGrid = new Uint8Array(COLS * ROWS)
   const brownShades = [0x78492a, 0x6e4225, 0x825130, 0x673e22]
   const oreSpritePool = []
 
@@ -1225,6 +1226,7 @@ function createGroundScene(onGameOver) {
   const MIN_PY = -HEIGHT * 0.4
   const DIG_COOLDOWN = 0.14
   const ORE_SPAWN_CHANCE = 0.22
+  const DEV_ORE_SPAWN_CHANCE = 0.75
   const BASE_FUEL_LITERS = 100
   const FUEL_BURN_FLOAT_MIN_LPS = 8
   const FUEL_BURN_FLOAT_MAX_LPS = 24
@@ -1268,6 +1270,7 @@ function createGroundScene(onGameOver) {
 
   function populateOres() {
     oreGrid.fill(-1)
+    const spawnChance = isDevMode ? DEV_ORE_SPAWN_CHANCE : ORE_SPAWN_CHANCE
     for (let r = 0; r < ROWS; r++) {
       const eligible = []
       let totalWeight = 0
@@ -1275,25 +1278,26 @@ function createGroundScene(onGameOver) {
         const ore = ORES[i]
         if (isDevMode || (r >= ore.minDepth && r <= ore.maxDepth)) {
           eligible.push(i)
-          totalWeight += ore.weight
+          totalWeight += isDevMode ? 1 : ore.weight
         }
       }
       if (eligible.length === 0) continue
 
       for (let c = 0; c < COLS; c++) {
-        if (Math.random() > ORE_SPAWN_CHANCE) continue
+        if (Math.random() > spawnChance) continue
 
         let roll = Math.random() * totalWeight
         let chosen = eligible[eligible.length - 1]
         for (let j = 0; j < eligible.length; j++) {
           const idx = eligible[j]
-          roll -= ORES[idx].weight
+          roll -= isDevMode ? 1 : ORES[idx].weight
           if (roll <= 0) {
             chosen = idx
             break
           }
         }
         oreGrid[r * COLS + c] = chosen
+        oreRotGrid[r * COLS + c] = Math.floor(Math.random() * 4)
       }
     }
   }
@@ -1622,6 +1626,7 @@ function createGroundScene(onGameOver) {
             const targetSize = TILE_SIZE * 0.72
             const maxDim = Math.max(ore.texture.width, ore.texture.height) || 1
             sprite.scale.set(targetSize / maxDim)
+            sprite.rotation = oreRotGrid[idx] * (Math.PI / 2)
             sprite.position.set(x + TILE_SIZE / 2, y + TILE_SIZE / 2)
             sprite.visible = true
           }
