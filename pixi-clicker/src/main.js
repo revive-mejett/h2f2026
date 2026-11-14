@@ -59,6 +59,37 @@ function playSfx(url, volume = 0.65) {
   audio.play().catch(() => {})
 }
 
+let audioCtx = null
+
+function playBackToMenuSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    if (!audioCtx) audioCtx = new AudioCtx()
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {})
+    }
+
+    const now = audioCtx.currentTime
+    const notes = [523.25, 392.0, 659.25]
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator()
+      const gain = audioCtx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(freq, now + i * 0.055)
+      gain.gain.setValueAtTime(0.001, now + i * 0.055)
+      gain.gain.exponentialRampToValueAtTime(0.14, now + i * 0.055 + 0.015)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.16)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start(now + i * 0.055)
+      osc.stop(now + i * 0.055 + 0.17)
+    })
+  } catch {
+    // ignore Web Audio errors
+  }
+}
+
 function loadTexture(url) {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -229,7 +260,19 @@ const menu = createMainMenu({
     groundScene.visible = true
     groundScene.start(save)
   },
+  onCredits: () => {
+    menu.visible = false
+    creditsScene.visible = true
+  },
 })
+
+const creditsScene = createCreditsScene(() => {
+  playBackToMenuSound()
+  creditsScene.visible = false
+  menu.refreshLoadState()
+  menu.visible = true
+})
+creditsScene.visible = false
 
 const groundScene = createGroundScene(() => {
   groundScene.stop()
@@ -239,16 +282,16 @@ const groundScene = createGroundScene(() => {
 })
 groundScene.visible = false
 
-app.stage.addChild(menu, groundScene)
+app.stage.addChild(menu, creditsScene, groundScene)
 
-function createMainMenu({ onNewGame, onLoadGame }) {
-  const scene = new Container()
+function createMenuBackdrop() {
+  const backdrop = new Container()
 
   // Gradient sky backdrop
   const sky = new Sprite(skyBlankTexture)
   sky.width = WIDTH
   sky.height = HEIGHT
-  scene.addChild(sky)
+  backdrop.addChild(sky)
 
   // Non-stretchable sun (uniform scale preserves aspect ratio)
   const sun = new Sprite(skySunTexture)
@@ -256,7 +299,7 @@ function createMainMenu({ onNewGame, onLoadGame }) {
   const sunScale = 360 / Math.max(skySunTexture.width, skySunTexture.height)
   sun.scale.set(sunScale)
   sun.position.set(WIDTH / 2, HEIGHT * 0.52)
-  scene.addChild(sun)
+  backdrop.addChild(sun)
 
   // Landscape background: distant ridge, city skyline, and synthwave horizon ground
   const horizonY = HEIGHT * 0.72
@@ -267,7 +310,7 @@ function createMainMenu({ onNewGame, onLoadGame }) {
   city.scale.set(cityScale)
   city.position.set(WIDTH / 2, horizonY + 18)
   city.alpha = 0.85
-  scene.addChild(city)
+  backdrop.addChild(city)
 
   const landscape = new Graphics()
   // Rolling hills silhouette along the horizon
@@ -304,7 +347,7 @@ function createMainMenu({ onNewGame, onLoadGame }) {
     const y = horizonY + (HEIGHT - horizonY) * f
     landscape.moveTo(0, y).lineTo(WIDTH, y).stroke({ color: 0x7f006e, width: 1.5, alpha: 0.7 })
   }
-  scene.addChild(landscape)
+  backdrop.addChild(landscape)
 
   // Bigger palm trees framing the main menu
   const menuPalms = [
@@ -319,33 +362,48 @@ function createMainMenu({ onNewGame, onLoadGame }) {
     const s = p.height / (palmTreeTexture.height || 1)
     palm.scale.set(s * p.flip, s)
     palm.position.set(p.x, p.y)
-    scene.addChild(palm)
+    backdrop.addChild(palm)
   }
+
+  return backdrop
+}
+
+function createMainMenu({ onNewGame, onLoadGame, onCredits }) {
+  const scene = new Container()
+  scene.addChild(createMenuBackdrop())
 
   const title = new Sprite(titleTexture)
   title.anchor.set(0.5)
   const titleScale = Math.min(0.85, (WIDTH * 0.72) / titleTexture.width)
   title.scale.set(titleScale)
-  title.position.set(WIDTH / 2, HEIGHT * 0.27)
+  title.position.set(WIDTH / 2, HEIGHT * 0.25)
   scene.addChild(title)
 
   const newGameButton = createButton('NEW GAME', {
     width: 240,
-    height: 58,
+    height: 52,
   })
-  newGameButton.position.set(WIDTH / 2, HEIGHT * 0.63)
+  newGameButton.position.set(WIDTH / 2, HEIGHT * 0.57)
   newGameButton.on('pointertap', onNewGame)
   scene.addChild(newGameButton)
 
   const loadGameButton = createButton('LOAD GAME', {
     width: 240,
-    height: 58,
+    height: 52,
   })
-  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.78)
+  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.70)
   loadGameButton.on('pointertap', () => {
     if (loadGameButton.enabled) onLoadGame()
   })
   scene.addChild(loadGameButton)
+
+  const creditsButton = createButton('CREDITS', {
+    width: 240,
+    height: 52,
+  })
+  creditsButton.position.set(WIDTH / 2, HEIGHT * 0.83)
+  creditsButton.on('pointertap', onCredits)
+  scene.addChild(creditsButton)
 
   scene.refreshLoadState = () => {
     const hasSave = readSaveData() !== null
@@ -355,6 +413,67 @@ function createMainMenu({ onNewGame, onLoadGame }) {
   }
 
   scene.refreshLoadState()
+
+  return scene
+}
+
+function createCreditsScene(onBack) {
+  const scene = new Container()
+  scene.addChild(createMenuBackdrop())
+
+  const CARD_W = 560
+  const CARD_H = 320
+  const card = new Container()
+  card.position.set((WIDTH - CARD_W) / 2, (HEIGHT - CARD_H) / 2 - 10)
+
+  const bg = new Graphics()
+    .rect(0, 0, CARD_W, CARD_H)
+    .fill({ color: 0x3a0032, alpha: 0.94 })
+    .stroke({ color: 0x00ffa5, width: 3 })
+  card.addChild(bg)
+
+  const heading = new Text({
+    text: 'CREDITS',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 30,
+      fill: '#00ffa5',
+      fontWeight: '900',
+    },
+  })
+  heading.anchor.set(0.5, 0)
+  heading.position.set(CARD_W / 2, 24)
+  card.addChild(heading)
+
+  const body = new Text({
+    text:
+      'Created by Kyle Veloso for H2F\n' +
+      '© 2026 Kyle Veloso\n\n' +
+      'Audio sourced via Unsplash',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 20,
+      lineHeight: 30,
+      fill: '#e6fff7',
+      fontWeight: '700',
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: CARD_W - 60,
+    },
+  })
+  body.anchor.set(0.5, 0.5)
+  body.position.set(CARD_W / 2, CARD_H / 2 + 4)
+  card.addChild(body)
+
+  const backBtn = createButton('BACK TO MAIN MENU', {
+    width: 280,
+    height: 48,
+  })
+  backBtn.position.set(CARD_W / 2, CARD_H - 46)
+  backBtn.on('pointertap', onBack)
+  card.addChild(backBtn)
+
+  scene.addChild(card)
 
   return scene
 }
