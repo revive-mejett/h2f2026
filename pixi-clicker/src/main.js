@@ -116,18 +116,18 @@ function loadTexture(url) {
 }
 
 const ORE_DEFS = [
-  { id: 'iron', name: 'Iron', value: 0.15, minDepth: 0, maxDepth: 150, url: ironUrl, color: 0x7b93ab, textColor: '#9ab4cc' },
-  { id: 'copper', name: 'Copper', value: 0.20, minDepth: 0, maxDepth: 3000, url: copperUrl, color: 0xd96b18, textColor: '#f28730' },
-  { id: 'bronze', name: 'Bronze', value: 0.25, minDepth: 0, maxDepth: 150, url: bronzeUrl, color: 0xf08c00, textColor: '#ffa726' },
-  { id: 'silver', name: 'Silver', value: 0.60, minDepth: 25, maxDepth: 300, url: silverUrl, color: 0xe2e8f0, textColor: '#f1f5f9' },
-  { id: 'gold', name: 'Gold', value: 1.15, minDepth: 50, maxDepth: 1000, url: goldUrl, color: 0xffea00, textColor: '#ffea00' },
-  { id: 'mythril', name: 'Mythril', value: 2.30, minDepth: 100, maxDepth: 3000, url: mythrilUrl, color: 0xd896ff, textColor: '#e2a6ff' },
-  { id: 'ruby', name: 'Ruby', value: 11.50, minDepth: 150, maxDepth: 3000, url: rubyUrl, color: 0xff2a2a, textColor: '#ff5252' },
-  { id: 'sapphire', name: 'Sapphire', value: 27.50, minDepth: 225, maxDepth: 3000, url: sapphireUrl, color: 0x3b6eff, textColor: '#6b94ff' },
-  { id: 'emerald', name: 'Emerald', value: 48.50, minDepth: 280, maxDepth: 3000, url: emeraldUrl, color: 0x00ff44, textColor: '#3dff70' },
-  { id: 'diamond', name: 'Diamond', value: 120.00, minDepth: 300, maxDepth: 3000, url: diamondUrl, color: 0x22f3ff, textColor: '#5cf7ff' },
-  { id: 'concordiaium', name: 'Concordiaium', value: 350.67, minDepth: 900, maxDepth: 3000, url: concordiaiumUrl, color: 0xff1e6e, textColor: '#ff3d82' },
-  { id: 'scsium', name: 'Scsium', value: 1000.67, minDepth: 1000, maxDepth: 3000, url: scsiumUrl, color: 0x3df5d4, textColor: '#52ffe0', strokeColor: '#4c0b6e' },
+  { id: 'iron', name: 'Iron', value: 0.15, minDepth: 0, maxDepth: 60, url: ironUrl, color: 0x7b93ab, textColor: '#9ab4cc' },
+  { id: 'copper', name: 'Copper', value: 0.20, minDepth: 0, maxDepth: 1200, url: copperUrl, color: 0xd96b18, textColor: '#f28730' },
+  { id: 'bronze', name: 'Bronze', value: 0.25, minDepth: 0, maxDepth: 60, url: bronzeUrl, color: 0xf08c00, textColor: '#ffa726' },
+  { id: 'silver', name: 'Silver', value: 0.60, minDepth: 10, maxDepth: 120, url: silverUrl, color: 0xe2e8f0, textColor: '#f1f5f9' },
+  { id: 'gold', name: 'Gold', value: 1.15, minDepth: 20, maxDepth: 400, url: goldUrl, color: 0xffea00, textColor: '#ffea00' },
+  { id: 'mythril', name: 'Mythril', value: 2.30, minDepth: 50, maxDepth: 1200, url: mythrilUrl, color: 0xd896ff, textColor: '#e2a6ff' },
+  { id: 'ruby', name: 'Ruby', value: 11.50, minDepth: 85, maxDepth: 1200, url: rubyUrl, color: 0xff2a2a, textColor: '#ff5252' },
+  { id: 'sapphire', name: 'Sapphire', value: 27.50, minDepth: 140, maxDepth: 1200, url: sapphireUrl, color: 0x3b6eff, textColor: '#6b94ff' },
+  { id: 'emerald', name: 'Emerald', value: 48.50, minDepth: 170, maxDepth: 1200, url: emeraldUrl, color: 0x00ff44, textColor: '#3dff70' },
+  { id: 'diamond', name: 'Diamond', value: 120.00, minDepth: 310, maxDepth: 1200, url: diamondUrl, color: 0x22f3ff, textColor: '#5cf7ff' },
+  { id: 'concordiaium', name: 'Concordiaium', value: 500, minDepth: 360, maxDepth: 1200, url: concordiaiumUrl, color: 0xff1e6e, textColor: '#ff3d82' },
+  { id: 'scsium', name: 'Scsium', value: 1000.67, minDepth: 700, maxDepth: 1200, url: scsiumUrl, color: 0x3df5d4, textColor: '#52ffe0', strokeColor: '#4c0b6e' },
 ]
 
 const app = new Application()
@@ -137,7 +137,7 @@ const WIDTH = 960
 const HEIGHT = 540
 
 const COLS = 20
-const ROWS = 3000
+const ROWS = 1200
 const TILE_SIZE = 64
 const WORLD_WIDTH = COLS * TILE_SIZE
 const WORLD_HEIGHT = ROWS * TILE_SIZE
