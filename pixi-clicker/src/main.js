@@ -1014,8 +1014,61 @@ function createGroundScene(onGameOver) {
 
   scene.addChild(pauseGui)
 
+  // Win modal (#3A0032 background, #00FFA5 border, sharp clear button)
+  const WIN_W = 580
+  const WIN_H = 260
+  const winGui = new Container()
+  winGui.position.set((WIDTH - WIN_W) / 2, (HEIGHT - PANEL_H - WIN_H) / 2)
+  winGui.visible = false
+
+  const winBg = new Graphics()
+    .rect(0, 0, WIN_W, WIN_H)
+    .fill({ color: 0x3a0032, alpha: 0.96 })
+    .stroke({ color: 0x00ffa5, width: 3 })
+  winGui.addChild(winBg)
+
+  const winTitle = new Text({
+    text: 'MISSION COMPLETE!',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 28,
+      fill: '#ffd94a',
+      fontWeight: '900',
+    },
+  })
+  winTitle.anchor.set(0.5, 0)
+  winTitle.position.set(WIN_W / 2, 22)
+  winGui.addChild(winTitle)
+
+  const winMessage = new Text({
+    text: 'CONGRATULATIONS! YOU HAVE SUCCESSFULLY FUNDED THE COLONIZATION PROJECT! NOW ALGOTIME CAN HAPPEN ON THIS PLANET!',
+    style: {
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: 18,
+      lineHeight: 26,
+      fill: '#00ffa5',
+      fontWeight: '800',
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: WIN_W - 56,
+    },
+  })
+  winMessage.anchor.set(0.5, 0.5)
+  winMessage.position.set(WIN_W / 2, 128)
+  winGui.addChild(winMessage)
+
+  const winMenuBtn = createShopButton('BACK TO MAIN MENU', 260, 46, () => {
+    winGui.visible = false
+    playBackToMenuSound()
+    onGameOver()
+  })
+  winMenuBtn.position.set((WIN_W - 260) / 2, WIN_H - 66)
+  winGui.addChild(winMenuBtn)
+
+  scene.addChild(winGui)
+
   function togglePause(forceState) {
-    if (!active || exploding || welcomeGui.visible) return
+    if (!active || exploding || welcomeGui.visible || hasWon) return
     const next = typeof forceState === 'boolean' ? forceState : !pauseGui.visible
     pauseGui.visible = next
     if (next) {
@@ -1117,8 +1170,10 @@ function createGroundScene(onGameOver) {
   const FUEL_BURN_FLOAT_MAX_LPS = 24
   const FUEL_BURN_DIG_LITERS = 1.5
   const FUEL_REFILL_LPS = 55
+  const WIN_TARGET_MONEY = 2005
 
   let money = 0
+  let hasWon = false
   let batteryTier = 0
   let maxFuelLiters = BASE_FUEL_LITERS
   let fuelLiters = BASE_FUEL_LITERS
@@ -1259,6 +1314,7 @@ function createGroundScene(onGameOver) {
     }
     money = saveData ? saveData.money : 0
     moneyText.text = formatMoney(money)
+    hasWon = false
     batteryTier = saveData ? saveData.batteryTier : 0
     maxFuelLiters = BATTERY_TIERS[batteryTier].liters
     fuelLiters = maxFuelLiters
@@ -1269,6 +1325,7 @@ function createGroundScene(onGameOver) {
     shopGui.visible = false
     saveGui.visible = false
     pauseGui.visible = false
+    winGui.visible = false
     welcomeGui.visible = saveData === null
     shopMessageText.text = ''
     saveStatusText.text = ''
@@ -1305,6 +1362,7 @@ function createGroundScene(onGameOver) {
     saveGui.visible = false
     savePrompt.visible = false
     pauseGui.visible = false
+    winGui.visible = false
     welcomeGui.visible = false
     player.visible = false
     keys.clear()
@@ -1343,6 +1401,21 @@ function createGroundScene(onGameOver) {
     popups.push({ label, life: 1.2, maxLife: 1.2 })
   }
 
+  function triggerWin() {
+    if (hasWon || exploding) return
+    hasWon = true
+    shopGui.visible = false
+    shopPrompt.visible = false
+    saveGui.visible = false
+    savePrompt.visible = false
+    pauseGui.visible = false
+    welcomeGui.visible = false
+    winGui.visible = true
+    keys.clear()
+    pressedQueue.clear()
+    playBackToMenuSound()
+  }
+
   function isSolid(col, row) {
     if (col < 0 || col >= COLS) return true
     if (row < 0) return false
@@ -1370,6 +1443,9 @@ function createGroundScene(onGameOver) {
       playSfx(mineralPickupSoundUrl, 0.7)
       money = Math.round((money + ore.value) * 100) / 100
       moneyText.text = formatMoney(money)
+      if (money >= WIN_TARGET_MONEY) {
+        triggerWin()
+      }
 
       const label = new Text({
         text: `${ore.name} +${formatMoney(ore.value)}`,
@@ -1539,7 +1615,7 @@ function createGroundScene(onGameOver) {
       return
     }
 
-    if (pauseGui.visible) {
+    if (pauseGui.visible || winGui.visible) {
       pressedQueue.clear()
       return
     }
@@ -1801,6 +1877,9 @@ function createGroundScene(onGameOver) {
   scene.start = (saveData = null) => {
     active = true
     resetWorld(saveData)
+    if (money >= WIN_TARGET_MONEY) {
+      triggerWin()
+    }
     renderVisibleTiles()
     world.position.set(-Math.round(camX), -Math.round(camY))
     cityLayer.x = -Math.round(camX * 0.35)
