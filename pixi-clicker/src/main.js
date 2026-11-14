@@ -230,10 +230,7 @@ function createMainMenu({ onNewGame, onLoadGame }) {
 
   const newGameButton = createButton('NEW GAME', {
     width: 240,
-    height: 64,
-    fill: '#00e5c0',
-    hover: '#5ffff0',
-    textColor: '#1a0830',
+    height: 58,
   })
   newGameButton.position.set(WIDTH / 2, HEIGHT * 0.66)
   newGameButton.on('pointertap', onNewGame)
@@ -242,12 +239,8 @@ function createMainMenu({ onNewGame, onLoadGame }) {
   const loadGameButton = createButton('LOAD GAME', {
     width: 240,
     height: 58,
-    fill: '#3a0032',
-    hover: '#58004c',
-    textColor: '#00ffa5',
-    stroke: '#00ffa5',
   })
-  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.82)
+  loadGameButton.position.set(WIDTH / 2, HEIGHT * 0.81)
   loadGameButton.on('pointertap', () => {
     if (loadGameButton.enabled) onLoadGame()
   })
@@ -1396,40 +1389,43 @@ function createGroundScene(onGameOver) {
   return scene
 }
 
-function createButton(label, { width, height, fill, hover, textColor, stroke }) {
+function createButton(label, { width, height }) {
   const button = new Container()
   button.eventMode = 'static'
   button.cursor = 'pointer'
   button.enabled = true
+  button.hitArea = new Rectangle(-width / 2, -height / 2, width, height)
 
-  function drawBg(color) {
-    bg.clear().roundRect(-width / 2, -height / 2, width, height, 16).fill(color)
-    if (stroke) {
-      bg.stroke({ color: stroke, width: 3 })
-    }
+  const border = new Graphics()
+
+  function redraw(hovered = false) {
+    border.clear()
+    border
+      .rect(-width / 2, -height / 2, width, height)
+      .stroke({ color: 0x00ffa5, width: hovered && button.enabled ? 3.5 : 2.5 })
   }
 
-  const bg = new Graphics()
-  drawBg(fill)
+  redraw(false)
 
   const text = new Text({
     text: label,
     style: {
       fontFamily: 'Segoe UI, system-ui, sans-serif',
-      fontSize: 26,
-      fill: textColor,
-      fontWeight: '700',
+      fontSize: 24,
+      fill: '#00ffa5',
+      fontWeight: '800',
+      stroke: { color: '#3a0032', width: 3 },
     },
   })
   text.anchor.set(0.5)
 
-  button.addChild(bg, text)
+  button.addChild(border, text)
 
   button.on('pointerover', () => {
-    if (button.enabled) drawBg(hover)
+    if (button.enabled) redraw(true)
   })
   button.on('pointerout', () => {
-    drawBg(fill)
+    redraw(false)
   })
 
   return button
