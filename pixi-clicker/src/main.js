@@ -725,18 +725,32 @@ function createGroundScene(onGameOver) {
   const brownShades = [0x78492a, 0x6e4225, 0x825130, 0x673e22]
   const oreSpritePool = []
 
+  // Columns directly under surface buildings are unmineable grey foundation blocks (row 0)
+  const foundationCols = new Set()
+  for (const building of [refuelStation, saveStation, upgradeShop]) {
+    const leftCol = Math.max(0, Math.floor((building.x - building.width * 0.42) / TILE_SIZE))
+    const rightCol = Math.min(COLS - 1, Math.floor((building.x + building.width * 0.42) / TILE_SIZE))
+    for (let c = leftCol; c <= rightCol; c++) {
+      foundationCols.add(c)
+    }
+  }
+
   const PLAYER_W = 42
   const PLAYER_H = 42
   const MOVE_SPEED = 270
   const GRAVITY = 1400
-  const FLOAT_THRUST = 2200
-  const MAX_FLOAT_SPEED = -280
+  const BASE_FLOAT_THRUST = 1800
+  const MAX_FLOAT_THRUST = 2900
+  const BASE_FLOAT_SPEED = -180
+  const MAX_FLOAT_SPEED = -480
+  const W_RAMP_DURATION = 1.6
   const MAX_FALL_SPEED = 650
   const MIN_PY = -HEIGHT * 0.4
   const DIG_COOLDOWN = 0.14
   const ORE_SPAWN_CHANCE = 0.22
   const BASE_FUEL_LITERS = 100
-  const FUEL_BURN_FLOAT_LPS = 14
+  const FUEL_BURN_FLOAT_MIN_LPS = 8
+  const FUEL_BURN_FLOAT_MAX_LPS = 24
   const FUEL_BURN_DIG_LITERS = 1.5
   const FUEL_REFILL_LPS = 55
 
@@ -744,6 +758,7 @@ function createGroundScene(onGameOver) {
   let batteryTier = 0
   let maxFuelLiters = BASE_FUEL_LITERS
   let fuelLiters = BASE_FUEL_LITERS
+  let wHoldTime = 0
   let wasNearShop = false
   let wasNearSave = false
   let px = WORLD_WIDTH / 2
@@ -873,12 +888,17 @@ function createGroundScene(onGameOver) {
   function resetWorld(saveData = null) {
     grid.fill(1)
     populateOres()
+    for (const c of foundationCols) {
+      grid[c] = 2
+      oreGrid[c] = -1
+    }
     money = saveData ? saveData.money : 0
     moneyText.text = formatMoney(money)
     batteryTier = saveData ? saveData.batteryTier : 0
     maxFuelLiters = BATTERY_TIERS[batteryTier].liters
     fuelLiters = maxFuelLiters
     drawFuelBar()
+    wHoldTime = 0
     wasNearShop = false
     wasNearSave = false
     shopGui.visible = false
@@ -957,13 +977,13 @@ function createGroundScene(onGameOver) {
     if (col < 0 || col >= COLS) return true
     if (row < 0) return false
     if (row >= ROWS) return true
-    return grid[row * COLS + col] === 1
+    return grid[row * COLS + col] !== 0
   }
 
   function digTile(col, row) {
     if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false
     const idx = row * COLS + col
-    if (grid[idx] === 0) return false
+    if (grid[idx] !== 1) return false
 
     grid[idx] = 0
     tilesDirty = true
@@ -1059,9 +1079,19 @@ function createGroundScene(onGameOver) {
         const y = r * TILE_SIZE
         for (let c = startCol; c <= endCol; c++) {
           const idx = r * COLS + c
-          if (grid[idx] !== 1) continue
+          const tile = grid[idx]
+          if (tile === 0) continue
 
           const x = c * TILE_SIZE
+          if (tile === 2) {
+            tilesGfx
+              .rect(x, y, TILE_SIZE, TILE_SIZE)
+              .fill(0x6b7280)
+              .stroke({ color: 0x374151, width: 2, alignment: 1 })
+            tilesGfx.rect(x + 4, y + 4, TILE_SIZE - 8, 6).fill(0x9ca3af)
+            continue
+          }
+
           const shade = brownShades[(r * 7 + c * 13) & 3]
 
           tilesGfx
@@ -1169,25 +1199,35 @@ function createGroundScene(onGameOver) {
     vx = moveDir * MOVE_SPEED
 
     if (wDown && fuelLiters > 0) {
+      wHoldTime = Math.min(W_RAMP_DURATION, wHoldTime + dt)
+      const ramp = wHoldTime / W_RAMP_DURATION
+
       if (onGround) {
-        vy = -160
+        vy = -140
         onGround = false
       }
-      vy = Math.max(MAX_FLOAT_SPEED, vy - (FLOAT_THRUST - GRAVITY) * dt)
-      fuelLiters = Math.max(0, fuelLiters - FUEL_BURN_FLOAT_LPS * dt)
 
-      if (Math.random() < 0.6) {
+      const currentThrust = BASE_FLOAT_THRUST + (MAX_FLOAT_THRUST - BASE_FLOAT_THRUST) * ramp
+      const maxUpSpeed = BASE_FLOAT_SPEED + (MAX_FLOAT_SPEED - BASE_FLOAT_SPEED) * ramp
+      const fuelBurnLps =
+        FUEL_BURN_FLOAT_MIN_LPS + (FUEL_BURN_FLOAT_MAX_LPS - FUEL_BURN_FLOAT_MIN_LPS) * ramp
+
+      vy = Math.max(maxUpSpeed, vy - (currentThrust - GRAVITY) * dt)
+      fuelLiters = Math.max(0, fuelLiters - fuelBurnLps * dt)
+
+      if (Math.random() < 0.45 + 0.45 * ramp) {
         particles.push({
           x: px + (Math.random() - 0.5) * 18,
           y: py - 2,
-          vx: (Math.random() - 0.5) * 40,
-          vy: 80 + Math.random() * 80,
-          size: 4 + Math.random() * 3,
+          vx: (Math.random() - 0.5) * (40 + 40 * ramp),
+          vy: 80 + (90 + 90 * ramp) * Math.random(),
+          size: 4 + Math.random() * (3 + 2 * ramp),
           life: 0.22 + Math.random() * 0.12,
-          color: 0x00e5c0,
+          color: ramp > 0.75 ? 0x00ffa5 : 0x00e5c0,
         })
       }
     } else {
+      wHoldTime = 0
       vy = Math.min(MAX_FALL_SPEED, vy + GRAVITY * dt)
     }
 
