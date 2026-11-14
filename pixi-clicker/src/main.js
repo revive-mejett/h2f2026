@@ -30,6 +30,34 @@ import rubyUrl from './assets/ore_ruby.png'
 import sapphireUrl from './assets/ore_sapphire.png'
 import scsiumUrl from './assets/ore_scsium.png'
 import silverUrl from './assets/ore_silver.png'
+import digSoundUrl from './assets/audio/dig_sound.mp3'
+import explosionSoundUrl from './assets/audio/explosion.mp3'
+import mineralPickupSoundUrl from './assets/audio/mineral_pickup.mp3'
+import cashRegisterSoundUrl from './assets/audio/cash_register.mp3'
+
+const sfxPools = new Map()
+
+function playSfx(url, volume = 0.65) {
+  let pool = sfxPools.get(url)
+  if (!pool) {
+    pool = []
+    sfxPools.set(url, pool)
+  }
+
+  let audio = pool.find((a) => a.paused || a.ended)
+  if (!audio) {
+    if (pool.length >= 6) {
+      audio = pool[0]
+    } else {
+      audio = new Audio(url)
+      pool.push(audio)
+    }
+  }
+
+  audio.volume = volume
+  audio.currentTime = 0
+  audio.play().catch(() => {})
+}
 
 function loadTexture(url) {
   return new Promise((resolve, reject) => {
@@ -993,6 +1021,7 @@ function createGroundScene(onGameOver) {
     fuelLiters = maxFuelLiters
     drawFuelBar()
     refreshShopUi()
+    playSfx(cashRegisterSoundUrl, 0.7)
 
     shopMessageText.style.fill = '#00ffa5'
     shopMessageText.text = `Bought ${tier.name} Battery (${tier.liters} L)!`
@@ -1065,6 +1094,7 @@ function createGroundScene(onGameOver) {
     if (exploding) return
     exploding = true
     explosionTimer = 1.3
+    playSfx(explosionSoundUrl, 0.8)
     shopGui.visible = false
     shopPrompt.visible = false
     saveGui.visible = false
@@ -1121,6 +1151,7 @@ function createGroundScene(onGameOver) {
 
     grid[idx] = 0
     tilesDirty = true
+    playSfx(digSoundUrl, 0.55)
 
     const oreIdx = oreGrid[idx]
     oreGrid[idx] = -1
@@ -1130,6 +1161,7 @@ function createGroundScene(onGameOver) {
 
     if (oreIdx >= 0) {
       const ore = ORES[oreIdx]
+      playSfx(mineralPickupSoundUrl, 0.7)
       money = Math.round((money + ore.value) * 100) / 100
       moneyText.text = formatMoney(money)
 
